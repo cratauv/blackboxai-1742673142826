@@ -1,6 +1,5 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { animate, style, transition, trigger } from '@angular/animations';
 
 type AlertType = 'info' | 'success' | 'warning' | 'error';
 type AlertSize = 'sm' | 'md' | 'lg';
@@ -11,258 +10,282 @@ type AlertSize = 'sm' | 'md' | 'lg';
   imports: [CommonModule],
   template: `
     <div
-      *ngIf="isVisible"
-      [@alertAnimation]
-      role="alert"
       class="rounded-lg"
       [class]="getAlertClasses()"
+      role="alert"
+      [attr.aria-live]="type === 'error' ? 'assertive' : 'polite'"
     >
       <div class="flex">
         <!-- Icon -->
         @if (showIcon) {
-          <div class="flex-shrink-0" [class]="getIconWrapperClasses()">
-            <i [class]="getIconClasses()"></i>
+          <div class="flex-shrink-0">
+            @switch (type) {
+              @case ('info') {
+                <i class="fas fa-info-circle text-blue-400"></i>
+              }
+              @case ('success') {
+                <i class="fas fa-check-circle text-green-400"></i>
+              }
+              @case ('warning') {
+                <i class="fas fa-exclamation-circle text-yellow-400"></i>
+              }
+              @case ('error') {
+                <i class="fas fa-times-circle text-red-400"></i>
+              }
+            }
           </div>
         }
 
         <!-- Content -->
-        <div class="flex-1 md:flex md:justify-between">
-          <div [class]="getContentClasses()">
-            <!-- Title -->
-            @if (title) {
-              <h3 class="text-sm font-medium" [class]="getTitleClasses()">
-                {{ title }}
-              </h3>
-            }
+        <div class="flex-1 ml-3">
+          <!-- Title -->
+          @if (title) {
+            <h3 [class]="getTitleClasses()">
+              {{ title }}
+            </h3>
+          }
 
-            <!-- Message -->
-            <div 
-              [class.mt-1]="title"
-              [class]="getMessageClasses()"
-            >
-              <p class="text-sm">{{ message }}</p>
-            </div>
-
-            <!-- Additional Content -->
-            @if (showContent) {
-              <div class="mt-2">
-                <ng-content></ng-content>
-              </div>
-            }
+          <!-- Message -->
+          <div [class]="getMessageClasses()">
+            <ng-content></ng-content>
           </div>
 
-          <!-- Action -->
-          @if (actionLabel) {
-            <div [class]="getActionClasses()">
-              <button
-                type="button"
-                class="whitespace-nowrap rounded-md font-medium focus:outline-none focus:ring-2 focus:ring-offset-2"
-                [class]="getActionButtonClasses()"
-                (click)="onAction()"
-              >
-                {{ actionLabel }}
-              </button>
+          <!-- Actions -->
+          @if (showActions) {
+            <div class="mt-3">
+              <div class="-mx-2 -my-1.5 flex">
+                @if (primaryAction) {
+                  <button
+                    type="button"
+                    [class]="getPrimaryActionClasses()"
+                    (click)="onPrimaryAction()"
+                  >
+                    {{ primaryAction }}
+                  </button>
+                }
+                @if (secondaryAction) {
+                  <button
+                    type="button"
+                    [class]="getSecondaryActionClasses()"
+                    (click)="onSecondaryAction()"
+                  >
+                    {{ secondaryAction }}
+                  </button>
+                }
+              </div>
             </div>
           }
         </div>
 
         <!-- Close Button -->
         @if (dismissible) {
-          <div class="ml-4 flex-shrink-0 self-start">
+          <div class="ml-auto pl-3">
             <button
               type="button"
-              class="rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2"
               [class]="getCloseButtonClasses()"
               (click)="dismiss()"
+              aria-label="Dismiss"
             >
-              <span class="sr-only">Dismiss</span>
               <i class="fas fa-times"></i>
             </button>
           </div>
         }
       </div>
     </div>
-  `,
-  animations: [
-    trigger('alertAnimation', [
-      transition(':enter', [
-        style({ opacity: 0, transform: 'scale(0.95)' }),
-        animate('150ms ease-out', style({ opacity: 1, transform: 'scale(1)' }))
-      ]),
-      transition(':leave', [
-        animate('100ms ease-in', style({ opacity: 0, transform: 'scale(0.95)' }))
-      ])
-    ])
-  ]
+  `
 })
 export class AlertComponent {
   @Input() type: AlertType = 'info';
   @Input() size: AlertSize = 'md';
   @Input() title = '';
-  @Input() message = '';
   @Input() showIcon = true;
   @Input() dismissible = true;
-  @Input() actionLabel = '';
-  @Input() showContent = false;
-  @Input() isVisible = true;
+  @Input() showActions = false;
+  @Input() primaryAction = '';
+  @Input() secondaryAction = '';
+  @Input() outlined = false;
 
   @Output() dismissed = new EventEmitter<void>();
-  @Output() action = new EventEmitter<void>();
+  @Output() primaryActionClick = new EventEmitter<void>();
+  @Output() secondaryActionClick = new EventEmitter<void>();
+
+  private readonly typeMap = {
+    solid: {
+      info: 'bg-blue-50 text-blue-700',
+      success: 'bg-green-50 text-green-700',
+      warning: 'bg-yellow-50 text-yellow-700',
+      error: 'bg-red-50 text-red-700'
+    },
+    outline: {
+      info: 'border border-blue-300 text-blue-700',
+      success: 'border border-green-300 text-green-700',
+      warning: 'border border-yellow-300 text-yellow-700',
+      error: 'border border-red-300 text-red-700'
+    }
+  };
+
+  private readonly sizeMap = {
+    sm: {
+      padding: 'p-3',
+      icon: 'text-sm',
+      title: 'text-sm font-medium',
+      message: 'text-sm',
+      button: 'px-2 py-1.5 text-sm'
+    },
+    md: {
+      padding: 'p-4',
+      icon: 'text-base',
+      title: 'text-base font-medium',
+      message: 'text-base',
+      button: 'px-3 py-2 text-sm'
+    },
+    lg: {
+      padding: 'p-5',
+      icon: 'text-lg',
+      title: 'text-lg font-medium',
+      message: 'text-base',
+      button: 'px-4 py-2.5 text-base'
+    }
+  };
 
   getAlertClasses(): string {
-    const baseClasses = 'p-4';
-    const sizeClasses = {
-      sm: 'max-w-sm',
-      md: 'max-w-md',
-      lg: 'max-w-lg'
-    };
-    const typeClasses = {
-      info: 'bg-blue-50 border border-blue-200',
-      success: 'bg-green-50 border border-green-200',
-      warning: 'bg-yellow-50 border border-yellow-200',
-      error: 'bg-red-50 border border-red-200'
-    };
-    return `${baseClasses} ${sizeClasses[this.size]} ${typeClasses[this.type]}`;
-  }
-
-  getIconWrapperClasses(): string {
-    return 'mr-3';
-  }
-
-  getIconClasses(): string {
-    const baseClasses = 'h-5 w-5';
-    const icons = {
-      info: 'fas fa-info-circle text-blue-400',
-      success: 'fas fa-check-circle text-green-400',
-      warning: 'fas fa-exclamation-triangle text-yellow-400',
-      error: 'fas fa-exclamation-circle text-red-400'
-    };
-    return `${baseClasses} ${icons[this.type]}`;
-  }
-
-  getContentClasses(): string {
-    return this.actionLabel ? 'ml-3 md:ml-0' : 'ml-3';
+    const variant = this.outlined ? 'outline' : 'solid';
+    return `
+      ${this.typeMap[variant][this.type]}
+      ${this.sizeMap[this.size].padding}
+    `;
   }
 
   getTitleClasses(): string {
-    const colors = {
-      info: 'text-blue-800',
-      success: 'text-green-800',
-      warning: 'text-yellow-800',
-      error: 'text-red-800'
-    };
-    return colors[this.type];
+    return this.sizeMap[this.size].title;
   }
 
   getMessageClasses(): string {
-    const colors = {
-      info: 'text-blue-700',
-      success: 'text-green-700',
-      warning: 'text-yellow-700',
-      error: 'text-red-700'
-    };
-    return colors[this.type];
-  }
-
-  getActionClasses(): string {
-    return 'mt-3 md:mt-0 md:ml-6';
-  }
-
-  getActionButtonClasses(): string {
-    const colors = {
-      info: 'text-blue-600 hover:text-blue-500 focus:ring-blue-600',
-      success: 'text-green-600 hover:text-green-500 focus:ring-green-600',
-      warning: 'text-yellow-600 hover:text-yellow-500 focus:ring-yellow-600',
-      error: 'text-red-600 hover:text-red-500 focus:ring-red-600'
-    };
-    return `${colors[this.type]} text-sm`;
+    return `
+      ${this.sizeMap[this.size].message}
+      ${this.title ? 'mt-1' : ''}
+    `;
   }
 
   getCloseButtonClasses(): string {
-    const colors = {
-      info: 'text-blue-400 hover:text-blue-500 focus:ring-blue-600',
-      success: 'text-green-400 hover:text-green-500 focus:ring-green-600',
-      warning: 'text-yellow-400 hover:text-yellow-500 focus:ring-yellow-600',
-      error: 'text-red-400 hover:text-red-500 focus:ring-red-600'
-    };
-    return colors[this.type];
+    return `
+      ${this.sizeMap[this.size].icon}
+      hover:bg-opacity-20
+      rounded-lg
+      p-1.5
+      inline-flex
+      focus:outline-none
+      focus:ring-2
+      focus:ring-offset-2
+      focus:ring-${this.type === 'info' ? 'blue' : this.type}-500
+    `;
+  }
+
+  getPrimaryActionClasses(): string {
+    return `
+      ${this.sizeMap[this.size].button}
+      bg-${this.type === 'info' ? 'blue' : this.type}-100
+      text-${this.type === 'info' ? 'blue' : this.type}-700
+      hover:bg-${this.type === 'info' ? 'blue' : this.type}-200
+      rounded-md
+      font-medium
+      focus:outline-none
+      focus:ring-2
+      focus:ring-offset-2
+      focus:ring-${this.type === 'info' ? 'blue' : this.type}-500
+      mr-2
+    `;
+  }
+
+  getSecondaryActionClasses(): string {
+    return `
+      ${this.sizeMap[this.size].button}
+      text-${this.type === 'info' ? 'blue' : this.type}-700
+      hover:bg-${this.type === 'info' ? 'blue' : this.type}-100
+      rounded-md
+      font-medium
+      focus:outline-none
+      focus:ring-2
+      focus:ring-offset-2
+      focus:ring-${this.type === 'info' ? 'blue' : this.type}-500
+    `;
   }
 
   dismiss(): void {
-    this.isVisible = false;
     this.dismissed.emit();
   }
 
-  onAction(): void {
-    this.action.emit();
+  onPrimaryAction(): void {
+    this.primaryActionClick.emit();
   }
 
-  // Helper method to show alert
-  show(): void {
-    this.isVisible = true;
+  onSecondaryAction(): void {
+    this.secondaryActionClick.emit();
   }
 
-  // Helper method to hide alert
-  hide(): void {
-    this.isVisible = false;
-  }
-
-  // Helper method to toggle alert visibility
-  toggle(): void {
-    this.isVisible = !this.isVisible;
-  }
-
-  // Helper method to update alert type
-  updateType(type: AlertType): void {
+  // Helper method to set type
+  setType(type: AlertType): void {
     this.type = type;
   }
 
-  // Helper method to update alert message
-  updateMessage(message: string): void {
-    this.message = message;
+  // Helper method to set size
+  setSize(size: AlertSize): void {
+    this.size = size;
   }
 
-  // Helper method to get alert role
-  getAlertRole(): string {
-    const roles = {
-      info: 'status',
-      success: 'status',
-      warning: 'alert',
-      error: 'alert'
-    };
-    return roles[this.type];
+  // Helper method to set title
+  setTitle(title: string): void {
+    this.title = title;
   }
 
-  // Helper method to get alert icon name
-  getIconName(): string {
-    const icons = {
-      info: 'info-circle',
-      success: 'check-circle',
-      warning: 'exclamation-triangle',
-      error: 'exclamation-circle'
-    };
-    return icons[this.type];
+  // Helper method to toggle icon
+  toggleIcon(show: boolean): void {
+    this.showIcon = show;
   }
 
-  // Helper method to get alert background color
-  getBgColor(): string {
-    const colors = {
-      info: 'bg-blue-50',
-      success: 'bg-green-50',
-      warning: 'bg-yellow-50',
-      error: 'bg-red-50'
-    };
-    return colors[this.type];
+  // Helper method to toggle dismissible
+  toggleDismissible(dismissible: boolean): void {
+    this.dismissible = dismissible;
   }
 
-  // Helper method to get alert border color
-  getBorderColor(): string {
-    const colors = {
-      info: 'border-blue-200',
-      success: 'border-green-200',
-      warning: 'border-yellow-200',
-      error: 'border-red-200'
+  // Helper method to set actions
+  setActions(primary: string, secondary: string = ''): void {
+    this.primaryAction = primary;
+    this.secondaryAction = secondary;
+    this.showActions = !!(primary || secondary);
+  }
+
+  // Helper method to toggle outline style
+  toggleOutline(outlined: boolean): void {
+    this.outlined = outlined;
+  }
+
+  // Helper method to get color scheme
+  getColorScheme(): { background: string; text: string; border?: string } {
+    const variant = this.outlined ? 'outline' : 'solid';
+    const classes = this.typeMap[variant][this.type].split(' ');
+    return {
+      background: classes.find(c => c.startsWith('bg-')) || '',
+      text: classes.find(c => c.startsWith('text-')) || '',
+      border: classes.find(c => c.startsWith('border-'))
     };
-    return colors[this.type];
+  }
+
+  // Helper method to get dimensions
+  getDimensions(): { padding: string; fontSize: string } {
+    return {
+      padding: this.sizeMap[this.size].padding,
+      fontSize: this.sizeMap[this.size].message
+    };
+  }
+
+  // Helper method to check if has title
+  hasTitle(): boolean {
+    return !!this.title;
+  }
+
+  // Helper method to check if has actions
+  hasActions(): boolean {
+    return this.showActions && !!(this.primaryAction || this.secondaryAction);
   }
 }
