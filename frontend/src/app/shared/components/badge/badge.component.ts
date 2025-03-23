@@ -10,142 +10,166 @@ type BadgeSize = 'sm' | 'md' | 'lg';
   imports: [CommonModule],
   template: `
     <span
-      class="inline-flex items-center justify-center"
-      [class]="[
-        baseClasses,
-        variantClasses[variant],
-        sizeClasses[size],
-        roundedClasses[rounded ? 'full' : 'default'],
-        pulseClasses[pulse ? 'active' : 'inactive']
-      ]"
+      [class]="getBadgeClasses()"
+      [class.animate-pulse]="pulse"
+      [class.cursor-pointer]="clickable"
+      (click)="onClick()"
     >
-      @if (icon) {
-        <i [class]="icon" [class.mr-1]="!!content"></i>
-      }
-      
-      @if (content) {
-        <span>{{ content }}</span>
+      <!-- Icon (Left) -->
+      @if (iconLeft) {
+        <i [class]="iconLeft + ' mr-1'"></i>
       }
 
-      @if (!icon && !content && showDot) {
-        <span class="flex h-2 w-2 rounded-full" [class]="dotClasses[variant]"></span>
+      <!-- Content -->
+      <ng-content></ng-content>
+
+      <!-- Icon (Right) -->
+      @if (iconRight) {
+        <i [class]="iconRight + ' ml-1'"></i>
+      }
+
+      <!-- Dot -->
+      @if (dot) {
+        <span
+          class="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 block h-2.5 w-2.5 rounded-full ring-2 ring-white"
+          [class]="getDotClasses()"
+        ></span>
       }
     </span>
   `,
   styles: [`
+    :host {
+      display: inline-block;
+    }
+
+    .animate-pulse {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
     @keyframes pulse {
-      0% {
-        transform: scale(1);
+      0%, 100% {
         opacity: 1;
       }
       50% {
-        transform: scale(1.05);
-        opacity: 0.8;
-      }
-      100% {
-        transform: scale(1);
-        opacity: 1;
+        opacity: .5;
       }
     }
   `]
 })
 export class BadgeComponent {
-  @Input() content?: string | number;
   @Input() variant: BadgeVariant = 'primary';
   @Input() size: BadgeSize = 'md';
-  @Input() icon?: string;
-  @Input() rounded = false;
+  @Input() rounded = true;
+  @Input() outlined = false;
+  @Input() iconLeft?: string;
+  @Input() iconRight?: string;
+  @Input() dot = false;
   @Input() pulse = false;
-  @Input() showDot = false;
+  @Input() clickable = false;
 
-  // Base classes applied to all badges
-  readonly baseClasses = `
-    font-medium whitespace-nowrap
-  `.trim();
-
-  // Classes for different variants
-  readonly variantClasses: Record<BadgeVariant, string> = {
+  private readonly variantClasses: Record<BadgeVariant, string> = {
     primary: 'bg-primary-100 text-primary-800',
     secondary: 'bg-gray-100 text-gray-800',
-    success: 'bg-green-100 text-green-800',
-    danger: 'bg-red-100 text-red-800',
-    warning: 'bg-yellow-100 text-yellow-800',
-    info: 'bg-blue-100 text-blue-800'
+    success: 'bg-success-100 text-success-800',
+    danger: 'bg-error-100 text-error-800',
+    warning: 'bg-warning-100 text-warning-800',
+    info: 'bg-info-100 text-info-800'
   };
 
-  // Classes for different sizes
-  readonly sizeClasses: Record<BadgeSize, string> = {
-    sm: 'text-xs px-2 py-0.5',
-    md: 'text-sm px-2.5 py-1',
-    lg: 'text-base px-3 py-1.5'
+  private readonly outlinedClasses: Record<BadgeVariant, string> = {
+    primary: 'border-primary-500 text-primary-700',
+    secondary: 'border-gray-500 text-gray-700',
+    success: 'border-success-500 text-success-700',
+    danger: 'border-error-500 text-error-700',
+    warning: 'border-warning-500 text-warning-700',
+    info: 'border-info-500 text-info-700'
   };
 
-  // Classes for rounded variants
-  readonly roundedClasses: Record<'default' | 'full', string> = {
-    default: 'rounded',
-    full: 'rounded-full'
+  private readonly dotClasses: Record<BadgeVariant, string> = {
+    primary: 'bg-primary-400',
+    secondary: 'bg-gray-400',
+    success: 'bg-success-400',
+    danger: 'bg-error-400',
+    warning: 'bg-warning-400',
+    info: 'bg-info-400'
   };
 
-  // Classes for pulse animation
-  readonly pulseClasses: Record<'active' | 'inactive', string> = {
-    active: 'animate-pulse',
-    inactive: ''
+  private readonly sizeClasses: Record<BadgeSize, string> = {
+    sm: 'px-2 py-0.5 text-xs',
+    md: 'px-2.5 py-0.5 text-sm',
+    lg: 'px-3 py-1 text-base'
   };
 
-  // Classes for dot variants
-  readonly dotClasses: Record<BadgeVariant, string> = {
-    primary: 'bg-primary-600',
-    secondary: 'bg-gray-600',
-    success: 'bg-green-600',
-    danger: 'bg-red-600',
-    warning: 'bg-yellow-600',
-    info: 'bg-blue-600'
-  };
+  getBadgeClasses(): string {
+    const classes = [
+      'inline-flex items-center font-medium relative',
+      this.sizeClasses[this.size],
+      this.rounded ? 'rounded-full' : 'rounded',
+      this.outlined
+        ? `bg-white border ${this.outlinedClasses[this.variant]}`
+        : this.variantClasses[this.variant],
+      this.clickable ? 'hover:opacity-80 transition-opacity' : ''
+    ];
 
-  // Helper method to get contrast text color
-  getContrastText(bgColor: string): string {
-    // Simple contrast calculation
-    const colors = {
-      'primary': 'text-primary-800',
-      'secondary': 'text-gray-800',
-      'success': 'text-green-800',
-      'danger': 'text-red-800',
-      'warning': 'text-yellow-800',
-      'info': 'text-blue-800'
-    };
-    return colors[bgColor as keyof typeof colors] || 'text-gray-800';
+    return classes.filter(Boolean).join(' ');
   }
 
-  // Helper method to format number content
-  formatNumber(num: number): string {
-    if (num >= 1000000) {
-      return `${(num / 1000000).toFixed(1)}M`;
-    }
-    if (num >= 1000) {
-      return `${(num / 1000).toFixed(1)}K`;
-    }
-    return num.toString();
+  getDotClasses(): string {
+    return this.dotClasses[this.variant];
   }
 
-  // Helper method to get content display
-  getDisplayContent(): string {
-    if (typeof this.content === 'number') {
-      return this.formatNumber(this.content);
-    }
-    return this.content || '';
+  onClick(): void {
+    // Emit click event if needed
   }
 
-  // Helper method to check if content is numeric
-  isNumeric(): boolean {
-    return typeof this.content === 'number';
+  // Helper method to set variant
+  setVariant(variant: BadgeVariant): void {
+    this.variant = variant;
   }
 
-  // Helper method to get animation classes
-  getAnimationClasses(): string {
-    const classes = [];
-    if (this.pulse) {
-      classes.push('animate-pulse');
-    }
-    return classes.join(' ');
+  // Helper method to set size
+  setSize(size: BadgeSize): void {
+    this.size = size;
+  }
+
+  // Helper method to toggle outline
+  toggleOutline(): void {
+    this.outlined = !this.outlined;
+  }
+
+  // Helper method to toggle rounded
+  toggleRounded(): void {
+    this.rounded = !this.rounded;
+  }
+
+  // Helper method to toggle dot
+  toggleDot(): void {
+    this.dot = !this.dot;
+  }
+
+  // Helper method to toggle pulse
+  togglePulse(): void {
+    this.pulse = !this.pulse;
+  }
+
+  // Helper method to toggle clickable
+  toggleClickable(): void {
+    this.clickable = !this.clickable;
+  }
+
+  // Helper method to set left icon
+  setLeftIcon(icon: string): void {
+    this.iconLeft = icon;
+  }
+
+  // Helper method to set right icon
+  setRightIcon(icon: string): void {
+    this.iconRight = icon;
+  }
+
+  // Helper method to clear icons
+  clearIcons(): void {
+    this.iconLeft = undefined;
+    this.iconRight = undefined;
   }
 }
