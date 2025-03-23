@@ -1,6 +1,5 @@
-import { Component, Input, Output, EventEmitter, ElementRef, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { animate, style, transition, trigger } from '@angular/animations';
 
 type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
 
@@ -9,189 +8,157 @@ type DialogSize = 'sm' | 'md' | 'lg' | 'xl' | 'full';
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div
-      class="fixed inset-0 z-50 overflow-y-auto"
-      [class.hidden]="!isOpen"
-      role="dialog"
-      aria-modal="true"
-      #dialogContainer
-    >
-      <!-- Backdrop -->
+    @if (isOpen) {
       <div
-        class="fixed inset-0 bg-black transition-opacity"
-        [class.bg-opacity-50]="!loading"
-        [class.bg-opacity-75]="loading"
-        [@fadeInOut]="isOpen"
-        (click)="onBackdropClick()"
-      ></div>
-
-      <!-- Dialog Panel -->
-      <div class="flex min-h-full items-center justify-center p-4">
+        class="fixed inset-0 z-50 overflow-y-auto"
+        role="dialog"
+        aria-modal="true"
+        [attr.aria-labelledby]="titleId"
+      >
+        <!-- Backdrop -->
         <div
-          class="relative w-full transform overflow-hidden rounded-lg bg-white shadow-xl transition-all"
-          [class]="getDialogClasses()"
-          [@slideInOut]="isOpen"
-          #dialogPanel
-        >
-          <!-- Loading State -->
-          @if (loading) {
-            <div class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-75 z-10">
-              <div class="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent"></div>
-            </div>
-          }
+          class="fixed inset-0 bg-black transition-opacity"
+          [class.bg-opacity-75]="!loading"
+          [class.bg-opacity-90]="loading"
+          (click)="onBackdropClick()"
+        ></div>
 
-          <!-- Header -->
-          @if (title || showCloseButton) {
-            <div class="flex items-center justify-between px-6 py-4 border-b">
-              <h3 class="text-lg font-medium text-gray-900">
-                {{ title }}
-              </h3>
-              @if (showCloseButton) {
-                <button
-                  type="button"
-                  class="text-gray-400 hover:text-gray-500 focus:outline-none"
-                  (click)="close()"
-                >
-                  <i class="fas fa-times"></i>
-                </button>
-              }
-            </div>
-          }
+        <!-- Dialog Panel -->
+        <div class="flex min-h-screen items-center justify-center p-4">
+          <div
+            class="relative w-full transform overflow-hidden rounded-lg bg-white shadow-xl transition-all"
+            [class]="getDialogClasses()"
+            (click)="$event.stopPropagation()"
+          >
+            <!-- Loading State -->
+            @if (loading) {
+              <div class="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80">
+                <div class="animate-spin rounded-full h-12 w-12 border-4 border-primary-500 border-t-transparent"></div>
+              </div>
+            }
 
-          <!-- Content -->
-          <div [class]="getContentClasses()">
-            <ng-content></ng-content>
+            <!-- Header -->
+            @if (showHeader) {
+              <div class="px-4 py-3 border-b border-gray-200 sm:px-6">
+                <div class="flex items-center justify-between">
+                  <h3
+                    [id]="titleId"
+                    class="text-lg font-medium text-gray-900"
+                  >
+                    {{ title }}
+                  </h3>
+                  @if (showCloseButton) {
+                    <button
+                      type="button"
+                      class="rounded-md text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      (click)="close()"
+                    >
+                      <span class="sr-only">Close</span>
+                      <i class="fas fa-times"></i>
+                    </button>
+                  }
+                </div>
+                @if (subtitle) {
+                  <p class="mt-1 text-sm text-gray-500">
+                    {{ subtitle }}
+                  </p>
+                }
+              </div>
+            }
+
+            <!-- Body -->
+            <div [class]="getBodyClasses()">
+              <ng-content></ng-content>
+            </div>
+
+            <!-- Footer -->
+            @if (showFooter) {
+              <div class="px-4 py-3 bg-gray-50 border-t border-gray-200 sm:px-6">
+                <div class="flex justify-end space-x-3">
+                  @if (showCancelButton) {
+                    <button
+                      type="button"
+                      class="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+                      (click)="cancel()"
+                    >
+                      {{ cancelText }}
+                    </button>
+                  }
+                  @if (showConfirmButton) {
+                    <button
+                      type="button"
+                      [class]="getConfirmButtonClasses()"
+                      [disabled]="confirmDisabled"
+                      (click)="confirm()"
+                    >
+                      @if (confirmLoading) {
+                        <i class="fas fa-spinner fa-spin mr-2"></i>
+                      }
+                      {{ confirmText }}
+                    </button>
+                  }
+                </div>
+              </div>
+            }
           </div>
-
-          <!-- Footer -->
-          @if (showFooter) {
-            <div class="flex items-center justify-end px-6 py-4 border-t space-x-2">
-              @if (showCancelButton) {
-                <button
-                  type="button"
-                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  [disabled]="loading"
-                  (click)="cancel()"
-                >
-                  {{ cancelText }}
-                </button>
-              }
-              @if (showConfirmButton) {
-                <button
-                  type="button"
-                  class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  [disabled]="loading"
-                  (click)="confirm()"
-                >
-                  {{ confirmText }}
-                </button>
-              }
-            </div>
-          }
         </div>
       </div>
-    </div>
-  `,
-  animations: [
-    trigger('fadeInOut', [
-      transition(':enter', [
-        style({ opacity: 0 }),
-        animate('200ms ease-out', style({ opacity: 1 }))
-      ]),
-      transition(':leave', [
-        animate('150ms ease-in', style({ opacity: 0 }))
-      ])
-    ]),
-    trigger('slideInOut', [
-      transition(':enter', [
-        style({ transform: 'scale(0.95)', opacity: 0 }),
-        animate('200ms ease-out', style({ transform: 'scale(1)', opacity: 1 }))
-      ]),
-      transition(':leave', [
-        animate('150ms ease-in', style({ transform: 'scale(0.95)', opacity: 0 }))
-      ])
-    ])
-  ]
+    }
+  `
 })
 export class DialogComponent {
-  @ViewChild('dialogContainer') dialogContainer!: ElementRef;
-  @ViewChild('dialogPanel') dialogPanel!: ElementRef;
-
   @Input() isOpen = false;
-  @Input() size: DialogSize = 'md';
   @Input() title = '';
+  @Input() subtitle = '';
+  @Input() size: DialogSize = 'md';
   @Input() loading = false;
-  @Input() showCloseButton = true;
+  @Input() showHeader = true;
   @Input() showFooter = true;
+  @Input() showCloseButton = true;
   @Input() showCancelButton = true;
   @Input() showConfirmButton = true;
   @Input() cancelText = 'Cancel';
   @Input() confirmText = 'Confirm';
+  @Input() confirmDisabled = false;
+  @Input() confirmLoading = false;
   @Input() closeOnBackdrop = true;
   @Input() closeOnEscape = true;
   @Input() preventScroll = true;
 
-  @Output() opened = new EventEmitter<void>();
   @Output() closed = new EventEmitter<void>();
   @Output() cancelled = new EventEmitter<void>();
   @Output() confirmed = new EventEmitter<void>();
 
-  private readonly sizeMap = {
-    sm: 'max-w-sm',
-    md: 'max-w-md',
-    lg: 'max-w-lg',
-    xl: 'max-w-xl',
-    full: 'max-w-full mx-4'
-  };
-
-  ngOnInit(): void {
-    if (this.closeOnEscape) {
-      document.addEventListener('keydown', this.handleEscapeKey.bind(this));
-    }
-  }
-
-  ngOnDestroy(): void {
-    if (this.closeOnEscape) {
-      document.removeEventListener('keydown', this.handleEscapeKey.bind(this));
-    }
-  }
-
-  ngOnChanges(): void {
-    if (this.isOpen) {
-      this.onOpen();
-    } else {
-      this.onClose();
-    }
-  }
-
-  private handleEscapeKey(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && this.isOpen) {
-      this.close();
-    }
-  }
-
-  private onOpen(): void {
-    if (this.preventScroll) {
-      document.body.style.overflow = 'hidden';
-    }
-    this.opened.emit();
-  }
-
-  private onClose(): void {
-    if (this.preventScroll) {
-      document.body.style.overflow = '';
-    }
-    this.closed.emit();
-  }
+  titleId = `dialog-title-${Math.random().toString(36).substr(2, 9)}`;
 
   getDialogClasses(): string {
-    return this.sizeMap[this.size];
+    const sizeClasses = {
+      sm: 'sm:max-w-sm',
+      md: 'sm:max-w-md',
+      lg: 'sm:max-w-lg',
+      xl: 'sm:max-w-xl',
+      full: 'sm:max-w-full sm:m-4'
+    };
+
+    return sizeClasses[this.size];
   }
 
-  getContentClasses(): string {
+  getBodyClasses(): string {
     return `
-      px-6 py-4
+      px-4 py-5 sm:p-6
       ${this.loading ? 'opacity-50' : ''}
+      ${this.size === 'full' ? 'h-[calc(100vh-16rem)]' : ''}
+      ${this.size === 'full' ? 'overflow-auto' : ''}
+    `;
+  }
+
+  getConfirmButtonClasses(): string {
+    return `
+      inline-flex justify-center rounded-md border border-transparent px-4 py-2 text-sm font-medium text-white shadow-sm
+      ${this.confirmDisabled || this.confirmLoading
+        ? 'bg-primary-400 cursor-not-allowed'
+        : 'bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2'
+      }
     `;
   }
 
@@ -204,7 +171,7 @@ export class DialogComponent {
   close(): void {
     if (!this.loading) {
       this.isOpen = false;
-      this.onClose();
+      this.closed.emit();
     }
   }
 
@@ -216,21 +183,25 @@ export class DialogComponent {
   }
 
   confirm(): void {
-    if (!this.loading) {
+    if (!this.loading && !this.confirmDisabled && !this.confirmLoading) {
       this.confirmed.emit();
-      this.close();
     }
   }
 
   // Helper method to open dialog
   open(): void {
     this.isOpen = true;
-    this.onOpen();
+    if (this.preventScroll) {
+      document.body.style.overflow = 'hidden';
+    }
   }
 
-  // Helper method to set loading state
-  setLoading(loading: boolean): void {
-    this.loading = loading;
+  // Helper method to set title
+  setTitle(title: string, subtitle?: string): void {
+    this.title = title;
+    if (subtitle) {
+      this.subtitle = subtitle;
+    }
   }
 
   // Helper method to set size
@@ -238,54 +209,46 @@ export class DialogComponent {
     this.size = size;
   }
 
-  // Helper method to set title
-  setTitle(title: string): void {
-    this.title = title;
+  // Helper method to set loading state
+  setLoading(loading: boolean): void {
+    this.loading = loading;
+  }
+
+  // Helper method to set confirm button state
+  setConfirmState(disabled: boolean, loading: boolean = false): void {
+    this.confirmDisabled = disabled;
+    this.confirmLoading = loading;
   }
 
   // Helper method to set button text
-  setButtonText(cancel: string, confirm: string): void {
-    this.cancelText = cancel;
-    this.confirmText = confirm;
+  setButtonText(confirm?: string, cancel?: string): void {
+    if (confirm) this.confirmText = confirm;
+    if (cancel) this.cancelText = cancel;
+  }
+
+  // Helper method to toggle header
+  toggleHeader(show: boolean): void {
+    this.showHeader = show;
+  }
+
+  // Helper method to toggle footer
+  toggleFooter(show: boolean): void {
+    this.showFooter = show;
   }
 
   // Helper method to toggle buttons
-  toggleButtons(showCancel: boolean, showConfirm: boolean): void {
-    this.showCancelButton = showCancel;
+  toggleButtons(showConfirm: boolean, showCancel: boolean): void {
     this.showConfirmButton = showConfirm;
+    this.showCancelButton = showCancel;
   }
 
   // Helper method to check if dialog is open
-  isDialogOpen(): boolean {
+  isShown(): boolean {
     return this.isOpen;
   }
 
-  // Helper method to get dialog dimensions
-  getDimensions(): { width: string; maxWidth: string } {
-    const panel = this.dialogPanel?.nativeElement;
-    return panel ? {
-      width: window.getComputedStyle(panel).width,
-      maxWidth: window.getComputedStyle(panel).maxWidth
-    } : { width: '0', maxWidth: '0' };
-  }
-
-  // Helper method to focus first focusable element
-  focusFirst(): void {
-    const focusable = this.dialogPanel?.nativeElement.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusable?.length) {
-      (focusable[0] as HTMLElement).focus();
-    }
-  }
-
-  // Helper method to focus last focusable element
-  focusLast(): void {
-    const focusable = this.dialogPanel?.nativeElement.querySelectorAll(
-      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-    );
-    if (focusable?.length) {
-      (focusable[focusable.length - 1] as HTMLElement).focus();
-    }
+  // Helper method to check if dialog can be closed
+  canClose(): boolean {
+    return !this.loading;
   }
 }
