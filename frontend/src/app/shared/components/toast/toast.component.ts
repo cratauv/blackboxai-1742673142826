@@ -1,22 +1,8 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { animate, style, transition, trigger } from '@angular/animations';
 
 type ToastType = 'success' | 'error' | 'warning' | 'info';
 type ToastPosition = 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'top-center' | 'bottom-center';
-
-interface Toast {
-  id: string;
-  message: string;
-  type: ToastType;
-  title?: string;
-  duration?: number;
-  dismissible?: boolean;
-  action?: {
-    label: string;
-    handler: () => void;
-  };
-}
 
 @Component({
   selector: 'app-toast',
@@ -24,272 +10,223 @@ interface Toast {
   imports: [CommonModule],
   template: `
     <div
-      class="fixed z-50"
-      [class]="getContainerPosition()"
+      class="fixed z-50 flex flex-col gap-2"
+      [class]="getContainerClasses()"
+      role="alert"
       aria-live="polite"
     >
-      <!-- Toast Stack -->
-      <div class="space-y-2 p-4">
-        @for (toast of toasts; track toast.id) {
-          <div
-            class="max-w-sm w-full bg-white shadow-lg rounded-lg pointer-events-auto"
-            [@toastAnimation]="getAnimationState(toast)"
-            (@toastAnimation.done)="onAnimationDone($event, toast)"
-          >
-            <div class="p-4">
-              <div class="flex items-start">
-                <!-- Icon -->
-                <div class="flex-shrink-0">
-                  @switch (toast.type) {
-                    @case ('success') {
-                      <i class="fas fa-check-circle text-green-500 text-lg"></i>
-                    }
-                    @case ('error') {
-                      <i class="fas fa-times-circle text-red-500 text-lg"></i>
-                    }
-                    @case ('warning') {
-                      <i class="fas fa-exclamation-circle text-yellow-500 text-lg"></i>
-                    }
-                    @case ('info') {
-                      <i class="fas fa-info-circle text-blue-500 text-lg"></i>
-                    }
-                  }
-                </div>
-
-                <!-- Content -->
-                <div class="ml-3 w-0 flex-1">
-                  @if (toast.title) {
-                    <p class="text-sm font-medium text-gray-900">
-                      {{ toast.title }}
-                    </p>
-                  }
-                  <p class="mt-1 text-sm text-gray-500">
-                    {{ toast.message }}
-                  </p>
-                  @if (toast.action) {
-                    <div class="mt-2">
-                      <button
-                        type="button"
-                        class="text-sm font-medium text-primary-600 hover:text-primary-500"
-                        (click)="onActionClick(toast)"
-                      >
-                        {{ toast.action.label }}
-                      </button>
-                    </div>
-                  }
-                </div>
-
-                <!-- Close Button -->
-                @if (toast.dismissible !== false) {
-                  <div class="ml-4 flex-shrink-0 flex">
-                    <button
-                      type="button"
-                      class="rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                      (click)="dismiss(toast)"
-                    >
-                      <span class="sr-only">Close</span>
-                      <i class="fas fa-times"></i>
-                    </button>
-                  </div>
-                }
-              </div>
+      @for (toast of toasts; track toast.id) {
+        <div
+          class="transform transition-all duration-300 ease-in-out"
+          [class]="getToastClasses(toast)"
+          [class.translate-x-0]="!toast.isExiting"
+          [class.translate-x-full]="toast.isExiting && position.includes('right')"
+          [class.translate-x-[-100%]]="toast.isExiting && position.includes('left')"
+          [class.translate-y-[-100%]]="toast.isExiting && position.includes('top')"
+          [class.translate-y-full]="toast.isExiting && position.includes('bottom')"
+        >
+          <!-- Icon -->
+          @if (toast.icon || getDefaultIcon(toast.type)) {
+            <div class="flex-shrink-0">
+              <i [class]="getIconClasses(toast)"></i>
             </div>
+          }
 
-            <!-- Progress Bar -->
-            @if (toast.duration && toast.duration > 0) {
-              <div class="h-0.5 relative">
-                <div
-                  class="absolute bottom-0 left-0 h-full transition-all duration-300"
-                  [class]="getProgressBarColor(toast)"
-                  [style.width]="getProgressWidth(toast)"
-                ></div>
-              </div>
+          <!-- Content -->
+          <div class="flex-1 ml-3">
+            @if (toast.title) {
+              <p class="text-sm font-medium text-gray-900">
+                {{ toast.title }}
+              </p>
             }
+            <p
+              [class.mt-1]="toast.title"
+              class="text-sm text-gray-500"
+            >
+              {{ toast.message }}
+            </p>
           </div>
-        }
-      </div>
+
+          <!-- Close Button -->
+          @if (toast.closeable) {
+            <div class="ml-4 flex-shrink-0 flex">
+              <button
+                type="button"
+                class="rounded-md inline-flex text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+                (click)="removeToast(toast.id)"
+              >
+                <span class="sr-only">Close</span>
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+          }
+
+          <!-- Progress Bar -->
+          @if (toast.showProgress && toast.duration) {
+            <div
+              class="absolute bottom-0 left-0 h-1 bg-white bg-opacity-20 transition-all duration-300"
+              [style.width.%]="getProgress(toast)"
+            ></div>
+          }
+        </div>
+      }
     </div>
-  `,
-  animations: [
-    trigger('toastAnimation', [
-      transition(':enter', [
-        style({ transform: 'translateY(100%)', opacity: 0 }),
-        animate('300ms ease-out', style({ transform: 'translateY(0)', opacity: 1 }))
-      ]),
-      transition(':leave', [
-        animate('200ms ease-in', style({ transform: 'scale(0.95)', opacity: 0 }))
-      ])
-    ])
-  ]
+  `
 })
 export class ToastComponent {
   @Input() position: ToastPosition = 'top-right';
   @Input() maxToasts = 5;
-  @Input() defaultDuration = 5000;
+  @Input() toasts: Array<{
+    id: string;
+    type: ToastType;
+    message: string;
+    title?: string;
+    icon?: string;
+    duration?: number;
+    closeable?: boolean;
+    showProgress?: boolean;
+    createdAt: Date;
+    isExiting?: boolean;
+  }> = [];
 
-  @Output() dismissed = new EventEmitter<Toast>();
+  @Output() toastRemoved = new EventEmitter<string>();
 
-  toasts: Toast[] = [];
-  private timers = new Map<string, any>();
-
-  show(toast: Partial<Toast>): void {
-    const newToast: Toast = {
-      id: this.generateId(),
-      message: toast.message || '',
-      type: toast.type || 'info',
-      title: toast.title,
-      duration: toast.duration ?? this.defaultDuration,
-      dismissible: toast.dismissible ?? true,
-      action: toast.action
+  getContainerClasses(): string {
+    const positionClasses = {
+      'top-right': 'top-0 right-0 p-4',
+      'top-left': 'top-0 left-0 p-4',
+      'bottom-right': 'bottom-0 right-0 p-4',
+      'bottom-left': 'bottom-0 left-0 p-4',
+      'top-center': 'top-0 left-1/2 -translate-x-1/2 p-4',
+      'bottom-center': 'bottom-0 left-1/2 -translate-x-1/2 p-4'
     };
 
-    this.toasts.unshift(newToast);
-
-    if (this.toasts.length > this.maxToasts) {
-      const oldToast = this.toasts.pop();
-      if (oldToast) {
-        this.clearTimer(oldToast.id);
-      }
-    }
-
-    if (newToast.duration && newToast.duration > 0) {
-      this.setTimer(newToast);
-    }
+    return positionClasses[this.position];
   }
 
-  dismiss(toast: Toast): void {
-    const index = this.toasts.indexOf(toast);
-    if (index > -1) {
-      this.toasts.splice(index, 1);
-      this.clearTimer(toast.id);
-      this.dismissed.emit(toast);
-    }
-  }
-
-  onActionClick(toast: Toast): void {
-    if (toast.action?.handler) {
-      toast.action.handler();
-    }
-    this.dismiss(toast);
-  }
-
-  onAnimationDone(event: any, toast: Toast): void {
-    if (event.toState === 'void') {
-      this.clearTimer(toast.id);
-    }
-  }
-
-  private setTimer(toast: Toast): void {
-    this.clearTimer(toast.id);
-    if (toast.duration && toast.duration > 0) {
-      const timer = setTimeout(() => {
-        this.dismiss(toast);
-      }, toast.duration);
-      this.timers.set(toast.id, timer);
-    }
-  }
-
-  private clearTimer(id: string): void {
-    const timer = this.timers.get(id);
-    if (timer) {
-      clearTimeout(timer);
-      this.timers.delete(id);
-    }
-  }
-
-  private generateId(): string {
-    return Math.random().toString(36).substring(2);
-  }
-
-  getContainerPosition(): string {
-    const positions = {
-      'top-right': 'top-0 right-0',
-      'top-left': 'top-0 left-0',
-      'bottom-right': 'bottom-0 right-0',
-      'bottom-left': 'bottom-0 left-0',
-      'top-center': 'top-0 left-1/2 -translate-x-1/2',
-      'bottom-center': 'bottom-0 left-1/2 -translate-x-1/2'
+  getToastClasses(toast: any): string {
+    const baseClasses = 'relative flex items-start p-4 rounded-lg shadow-lg max-w-sm w-full';
+    
+    const typeClasses = {
+      success: 'bg-success-50',
+      error: 'bg-error-50',
+      warning: 'bg-warning-50',
+      info: 'bg-info-50'
     };
-    return positions[this.position];
+
+    return `${baseClasses} ${typeClasses[toast.type]}`;
   }
 
-  getProgressBarColor(toast: Toast): string {
-    const colors = {
-      success: 'bg-green-500',
-      error: 'bg-red-500',
-      warning: 'bg-yellow-500',
-      info: 'bg-blue-500'
+  getIconClasses(toast: any): string {
+    const icon = toast.icon || this.getDefaultIcon(toast.type);
+    const typeClasses = {
+      success: 'text-success-400',
+      error: 'text-error-400',
+      warning: 'text-warning-400',
+      info: 'text-info-400'
     };
-    return colors[toast.type];
+
+    return `${icon} ${typeClasses[toast.type]}`;
   }
 
-  getProgressWidth(toast: Toast): string {
-    const timer = this.timers.get(toast.id);
-    if (!timer || !toast.duration) return '0%';
-    const elapsed = Date.now() - timer.startTime;
-    const progress = (1 - elapsed / toast.duration) * 100;
-    return `${Math.max(0, Math.min(100, progress))}%`;
+  getDefaultIcon(type: ToastType): string {
+    const icons = {
+      success: 'fas fa-check-circle',
+      error: 'fas fa-exclamation-circle',
+      warning: 'fas fa-exclamation-triangle',
+      info: 'fas fa-info-circle'
+    };
+
+    return icons[type];
   }
 
-  getAnimationState(toast: Toast): string {
-    return toast.id;
+  getProgress(toast: any): number {
+    if (!toast.duration) return 0;
+    
+    const elapsed = Date.now() - toast.createdAt.getTime();
+    const progress = 100 - (elapsed / toast.duration) * 100;
+    
+    return Math.max(0, Math.min(100, progress));
   }
 
-  // Helper method to show success toast
-  success(message: string, options?: Partial<Toast>): void {
-    this.show({ ...options, message, type: 'success' });
+  removeToast(id: string): void {
+    const toast = this.toasts.find(t => t.id === id);
+    if (toast) {
+      toast.isExiting = true;
+      setTimeout(() => {
+        this.toastRemoved.emit(id);
+      }, 300);
+    }
   }
 
-  // Helper method to show error toast
-  error(message: string, options?: Partial<Toast>): void {
-    this.show({ ...options, message, type: 'error' });
-  }
-
-  // Helper method to show warning toast
-  warning(message: string, options?: Partial<Toast>): void {
-    this.show({ ...options, message, type: 'warning' });
-  }
-
-  // Helper method to show info toast
-  info(message: string, options?: Partial<Toast>): void {
-    this.show({ ...options, message, type: 'info' });
+  // Helper method to add toast
+  addToast(toast: any): void {
+    if (this.toasts.length >= this.maxToasts) {
+      this.removeToast(this.toasts[0].id);
+    }
+    this.toasts.push({
+      ...toast,
+      id: toast.id || `toast-${Date.now()}`,
+      createdAt: new Date(),
+      closeable: toast.closeable ?? true,
+      showProgress: toast.showProgress ?? true
+    });
   }
 
   // Helper method to clear all toasts
-  clear(): void {
-    this.toasts.forEach(toast => this.clearTimer(toast.id));
-    this.toasts = [];
+  clearToasts(): void {
+    this.toasts.forEach(toast => this.removeToast(toast.id));
   }
 
-  // Helper method to get toast count
-  getCount(): number {
-    return this.toasts.length;
-  }
-
-  // Helper method to check if has active toasts
-  hasToasts(): boolean {
-    return this.toasts.length > 0;
-  }
-
-  // Helper method to pause timer on hover
-  pauseTimer(toast: Toast): void {
-    const timer = this.timers.get(toast.id);
-    if (timer) {
-      clearTimeout(timer);
-      timer.remaining = timer.endTime - Date.now();
+  // Helper method to update toast
+  updateToast(id: string, updates: Partial<any>): void {
+    const toast = this.toasts.find(t => t.id === id);
+    if (toast) {
+      Object.assign(toast, updates);
     }
   }
 
-  // Helper method to resume timer after hover
-  resumeTimer(toast: Toast): void {
-    const timer = this.timers.get(toast.id);
-    if (timer && timer.remaining) {
-      timer.startTime = Date.now();
-      timer.endTime = Date.now() + timer.remaining;
-      const newTimer = setTimeout(() => {
-        this.dismiss(toast);
-      }, timer.remaining);
-      this.timers.set(toast.id, newTimer);
+  // Helper method to get toast by id
+  getToast(id: string): any {
+    return this.toasts.find(t => t.id === id);
+  }
+
+  // Helper method to check if toast exists
+  hasToast(id: string): boolean {
+    return this.toasts.some(t => t.id === id);
+  }
+
+  // Helper method to get toast count
+  getToastCount(): number {
+    return this.toasts.length;
+  }
+
+  // Helper method to set position
+  setPosition(position: ToastPosition): void {
+    this.position = position;
+  }
+
+  // Helper method to set max toasts
+  setMaxToasts(max: number): void {
+    this.maxToasts = max;
+    if (this.toasts.length > max) {
+      this.toasts.slice(max).forEach(toast => this.removeToast(toast.id));
+    }
+  }
+
+  // Helper method to pause toast timer
+  pauseToast(id: string): void {
+    const toast = this.toasts.find(t => t.id === id);
+    if (toast) {
+      toast.isPaused = true;
+    }
+  }
+
+  // Helper method to resume toast timer
+  resumeToast(id: string): void {
+    const toast = this.toasts.find(t => t.id === id);
+    if (toast) {
+      toast.isPaused = false;
     }
   }
 }
