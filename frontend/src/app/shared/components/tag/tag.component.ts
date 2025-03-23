@@ -1,9 +1,9 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-type TagType = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info';
+type TagVariant = 'solid' | 'outlined' | 'soft';
 type TagSize = 'sm' | 'md' | 'lg';
-type TagVariant = 'solid' | 'soft' | 'outline';
+type TagColor = 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'default';
 
 @Component({
   selector: 'app-tag',
@@ -11,173 +11,194 @@ type TagVariant = 'solid' | 'soft' | 'outline';
   imports: [CommonModule],
   template: `
     <div
-      class="inline-flex items-center justify-center"
       [class]="getTagClasses()"
-      [class.cursor-pointer]="clickable"
-      [class.opacity-50]="disabled"
-      (click)="onClick($event)"
+      [attr.data-testid]="testId"
     >
-      <!-- Leading Icon -->
+      <!-- Icon -->
       @if (icon) {
-        <i
-          [class]="icon"
-          [class.mr-1.5]="!!label"
-          [class]="getIconClasses()"
-        ></i>
+        <i [class]="icon + ' ' + getIconClasses()"></i>
+      }
+
+      <!-- Dot -->
+      @if (showDot) {
+        <span
+          class="w-2 h-2 rounded-full"
+          [class]="getDotClasses()"
+        ></span>
       }
 
       <!-- Label -->
-      @if (label) {
-        <span class="truncate">{{ label }}</span>
-      }
+      <span [class]="getLabelClasses()">{{ label }}</span>
 
-      <!-- Remove Button -->
-      @if (removable && !disabled) {
+      <!-- Close Button -->
+      @if (closable && !disabled) {
         <button
           type="button"
-          class="ml-1.5 focus:outline-none"
-          [class]="getRemoveButtonClasses()"
-          (click)="onRemove($event)"
-          aria-label="Remove"
+          class="ml-1 focus:outline-none"
+          (click)="onClose($event)"
+          [attr.aria-label]="'Remove ' + label"
         >
-          <i class="fas fa-times"></i>
+          <i
+            class="fas fa-times"
+            [class]="getCloseIconClasses()"
+          ></i>
         </button>
       }
     </div>
   `
 })
 export class TagComponent {
-  @Input() type: TagType = 'primary';
-  @Input() size: TagSize = 'md';
-  @Input() variant: TagVariant = 'solid';
   @Input() label = '';
+  @Input() variant: TagVariant = 'solid';
+  @Input() color: TagColor = 'default';
+  @Input() size: TagSize = 'md';
   @Input() icon = '';
-  @Input() removable = false;
-  @Input() clickable = false;
+  @Input() showDot = false;
+  @Input() closable = false;
   @Input() disabled = false;
-  @Input() selected = false;
+  @Input() clickable = false;
+  @Input() testId = '';
 
-  @Output() remove = new EventEmitter<void>();
+  @Output() close = new EventEmitter<void>();
   @Output() click = new EventEmitter<void>();
 
-  private readonly sizeMap = {
-    sm: {
-      base: 'px-2 py-0.5 text-xs',
-      icon: 'text-xs'
-    },
-    md: {
-      base: 'px-2.5 py-1 text-sm',
-      icon: 'text-sm'
-    },
-    lg: {
-      base: 'px-3 py-1.5 text-base',
-      icon: 'text-base'
-    }
-  };
-
-  private readonly colorMap = {
-    solid: {
-      primary: 'bg-primary-500 text-white hover:bg-primary-600',
-      secondary: 'bg-gray-500 text-white hover:bg-gray-600',
-      success: 'bg-green-500 text-white hover:bg-green-600',
-      danger: 'bg-red-500 text-white hover:bg-red-600',
-      warning: 'bg-yellow-500 text-white hover:bg-yellow-600',
-      info: 'bg-blue-500 text-white hover:bg-blue-600'
-    },
-    soft: {
-      primary: 'bg-primary-50 text-primary-700 hover:bg-primary-100',
-      secondary: 'bg-gray-50 text-gray-700 hover:bg-gray-100',
-      success: 'bg-green-50 text-green-700 hover:bg-green-100',
-      danger: 'bg-red-50 text-red-700 hover:bg-red-100',
-      warning: 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100',
-      info: 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-    },
-    outline: {
-      primary: 'border border-primary-500 text-primary-500 hover:bg-primary-50',
-      secondary: 'border border-gray-500 text-gray-500 hover:bg-gray-50',
-      success: 'border border-green-500 text-green-500 hover:bg-green-50',
-      danger: 'border border-red-500 text-red-500 hover:bg-red-50',
-      warning: 'border border-yellow-500 text-yellow-500 hover:bg-yellow-50',
-      info: 'border border-blue-500 text-blue-500 hover:bg-blue-50'
-    }
-  };
-
   getTagClasses(): string {
-    return `
-      ${this.sizeMap[this.size].base}
-      ${this.colorMap[this.variant][this.type]}
-      rounded-md
-      font-medium
-      transition-colors
-      ${this.selected ? 'ring-2 ring-offset-2' : ''}
-      ${this.clickable && !this.disabled ? 'cursor-pointer' : ''}
-    `.trim();
-  }
-
-  getIconClasses(): string {
-    return this.sizeMap[this.size].icon;
-  }
-
-  getRemoveButtonClasses(): string {
-    const hoverColors = {
-      solid: {
-        primary: 'hover:text-primary-200',
-        secondary: 'hover:text-gray-200',
-        success: 'hover:text-green-200',
-        danger: 'hover:text-red-200',
-        warning: 'hover:text-yellow-200',
-        info: 'hover:text-blue-200'
-      },
-      soft: {
-        primary: 'hover:text-primary-800',
-        secondary: 'hover:text-gray-800',
-        success: 'hover:text-green-800',
-        danger: 'hover:text-red-800',
-        warning: 'hover:text-yellow-800',
-        info: 'hover:text-blue-800'
-      },
-      outline: {
-        primary: 'hover:text-primary-700',
-        secondary: 'hover:text-gray-700',
-        success: 'hover:text-green-700',
-        danger: 'hover:text-red-700',
-        warning: 'hover:text-yellow-700',
-        info: 'hover:text-blue-700'
-      }
+    const baseClasses = 'inline-flex items-center';
+    const sizeClasses = {
+      sm: 'px-2 py-0.5 text-xs',
+      md: 'px-2.5 py-1 text-sm',
+      lg: 'px-3 py-1.5 text-base'
     };
 
+    const variantClasses = {
+      solid: this.getSolidClasses(),
+      outlined: this.getOutlinedClasses(),
+      soft: this.getSoftClasses()
+    };
+
+    const stateClasses = this.getStateClasses();
+    const roundedClasses = 'rounded-md';
+
     return `
-      ${this.sizeMap[this.size].icon}
-      ${hoverColors[this.variant][this.type]}
+      ${baseClasses}
+      ${sizeClasses[this.size]}
+      ${variantClasses[this.variant]}
+      ${stateClasses}
+      ${roundedClasses}
+      transition-all duration-200
     `;
   }
 
-  onClick(event: MouseEvent): void {
+  private getSolidClasses(): string {
+    const colorClasses = {
+      primary: 'bg-primary-600 text-white',
+      secondary: 'bg-gray-600 text-white',
+      success: 'bg-success-600 text-white',
+      warning: 'bg-warning-600 text-white',
+      error: 'bg-error-600 text-white',
+      info: 'bg-info-600 text-white',
+      default: 'bg-gray-100 text-gray-800'
+    };
+
+    return colorClasses[this.color];
+  }
+
+  private getOutlinedClasses(): string {
+    const colorClasses = {
+      primary: 'border border-primary-600 text-primary-600',
+      secondary: 'border border-gray-600 text-gray-600',
+      success: 'border border-success-600 text-success-600',
+      warning: 'border border-warning-600 text-warning-600',
+      error: 'border border-error-600 text-error-600',
+      info: 'border border-info-600 text-info-600',
+      default: 'border border-gray-300 text-gray-700'
+    };
+
+    return colorClasses[this.color];
+  }
+
+  private getSoftClasses(): string {
+    const colorClasses = {
+      primary: 'bg-primary-50 text-primary-700',
+      secondary: 'bg-gray-50 text-gray-700',
+      success: 'bg-success-50 text-success-700',
+      warning: 'bg-warning-50 text-warning-700',
+      error: 'bg-error-50 text-error-700',
+      info: 'bg-info-50 text-info-700',
+      default: 'bg-gray-50 text-gray-700'
+    };
+
+    return colorClasses[this.color];
+  }
+
+  private getStateClasses(): string {
+    const classes = [];
+
+    if (this.disabled) {
+      classes.push('opacity-50 cursor-not-allowed');
+    } else if (this.clickable) {
+      classes.push('cursor-pointer hover:opacity-80');
+    }
+
+    return classes.join(' ');
+  }
+
+  getIconClasses(): string {
+    return `${this.size === 'sm' ? 'text-xs' : 'text-sm'} mr-1.5`;
+  }
+
+  getLabelClasses(): string {
+    return 'font-medium';
+  }
+
+  getDotClasses(): string {
+    const colorClasses = {
+      primary: 'bg-primary-600',
+      secondary: 'bg-gray-600',
+      success: 'bg-success-600',
+      warning: 'bg-warning-600',
+      error: 'bg-error-600',
+      info: 'bg-info-600',
+      default: 'bg-gray-600'
+    };
+
+    return `${colorClasses[this.color]} mr-1.5`;
+  }
+
+  getCloseIconClasses(): string {
+    return `
+      ${this.size === 'sm' ? 'text-xs' : 'text-sm'}
+      hover:opacity-75
+      transition-opacity
+    `;
+  }
+
+  onClose(event: Event): void {
+    event.stopPropagation();
+    if (!this.disabled) {
+      this.close.emit();
+    }
+  }
+
+  onClick(): void {
     if (!this.disabled && this.clickable) {
       this.click.emit();
     }
   }
 
-  onRemove(event: MouseEvent): void {
-    event.stopPropagation();
-    if (!this.disabled) {
-      this.remove.emit();
-    }
+  // Helper method to set variant
+  setVariant(variant: TagVariant): void {
+    this.variant = variant;
   }
 
-  // Helper method to set type
-  setType(type: TagType): void {
-    this.type = type;
+  // Helper method to set color
+  setColor(color: TagColor): void {
+    this.color = color;
   }
 
   // Helper method to set size
   setSize(size: TagSize): void {
     this.size = size;
-  }
-
-  // Helper method to set variant
-  setVariant(variant: TagVariant): void {
-    this.variant = variant;
   }
 
   // Helper method to set label
@@ -190,36 +211,24 @@ export class TagComponent {
     this.icon = icon;
   }
 
-  // Helper method to toggle selected state
-  toggleSelected(): void {
-    if (!this.disabled) {
-      this.selected = !this.selected;
-    }
+  // Helper method to toggle dot
+  toggleDot(show: boolean): void {
+    this.showDot = show;
   }
 
-  // Helper method to toggle disabled state
-  toggleDisabled(): void {
-    this.disabled = !this.disabled;
+  // Helper method to toggle closable
+  toggleClosable(closable: boolean): void {
+    this.closable = closable;
   }
 
-  // Helper method to toggle removable
-  toggleRemovable(): void {
-    this.removable = !this.removable;
+  // Helper method to toggle disabled
+  toggleDisabled(disabled: boolean): void {
+    this.disabled = disabled;
   }
 
   // Helper method to toggle clickable
-  toggleClickable(): void {
-    this.clickable = !this.clickable;
-  }
-
-  // Helper method to get color scheme
-  getColorScheme(): { background: string; text: string; border?: string } {
-    const classes = this.colorMap[this.variant][this.type].split(' ');
-    return {
-      background: classes.find(c => c.startsWith('bg-')) || '',
-      text: classes.find(c => c.startsWith('text-')) || '',
-      border: classes.find(c => c.startsWith('border-'))
-    };
+  toggleClickable(clickable: boolean): void {
+    this.clickable = clickable;
   }
 
   // Helper method to check if has icon
@@ -227,18 +236,15 @@ export class TagComponent {
     return !!this.icon;
   }
 
-  // Helper method to check if has label
-  hasLabel(): boolean {
-    return !!this.label;
+  // Helper method to check if has dot
+  hasDot(): boolean {
+    return this.showDot;
   }
 
-  // Helper method to get dimensions
-  getDimensions(): { height: string; minWidth: string } {
-    const sizes = {
-      sm: { height: '1.5rem', minWidth: '1.5rem' },
-      md: { height: '2rem', minWidth: '2rem' },
-      lg: { height: '2.5rem', minWidth: '2.5rem' }
-    };
-    return sizes[this.size];
+  // Helper method to get current state
+  getState(): 'default' | 'disabled' | 'clickable' {
+    if (this.disabled) return 'disabled';
+    if (this.clickable) return 'clickable';
+    return 'default';
   }
 }
