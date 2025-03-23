@@ -1,7 +1,7 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-type SkeletonType = 'text' | 'circle' | 'rect' | 'avatar' | 'button' | 'card';
+type SkeletonVariant = 'text' | 'circular' | 'rectangular' | 'rounded';
 type SkeletonAnimation = 'pulse' | 'wave' | 'none';
 
 @Component({
@@ -10,156 +10,108 @@ type SkeletonAnimation = 'pulse' | 'wave' | 'none';
   imports: [CommonModule],
   template: `
     <div
-      class="bg-gray-200 dark:bg-gray-700"
-      [class]="getSkeletonClasses()"
+      [class]="getContainerClasses()"
       [style.width]="width"
       [style.height]="height"
       [style.borderRadius]="getBorderRadius()"
-      aria-hidden="true"
     >
-      @if (type === 'avatar' && showInitials) {
-        <div class="w-full h-full flex items-center justify-center text-gray-300">
-          <i class="fas fa-user"></i>
-        </div>
-      }
-
-      @if (type === 'card') {
-        <div class="h-full">
-          <!-- Card Image -->
-          <div class="h-48 bg-gray-300 dark:bg-gray-600"></div>
-
-          <!-- Card Content -->
-          <div class="p-4 space-y-3">
-            <!-- Title -->
-            <div class="h-4 bg-gray-300 dark:bg-gray-600 rounded w-3/4"></div>
-
-            <!-- Description -->
-            <div class="space-y-2">
-              <div class="h-3 bg-gray-300 dark:bg-gray-600 rounded"></div>
-              <div class="h-3 bg-gray-300 dark:bg-gray-600 rounded w-5/6"></div>
-            </div>
-
-            <!-- Footer -->
-            <div class="flex justify-between items-center pt-2">
-              <div class="h-8 w-24 bg-gray-300 dark:bg-gray-600 rounded"></div>
-              <div class="h-8 w-8 bg-gray-300 dark:bg-gray-600 rounded-full"></div>
-            </div>
-          </div>
-        </div>
+      @if (animation === 'wave') {
+        <div class="skeleton-wave absolute inset-0"></div>
       }
     </div>
   `,
   styles: [`
-    @keyframes wave {
-      0% { transform: translateX(-100%); }
-      50%, 100% { transform: translateX(100%); }
-    }
-
-    .skeleton-wave {
-      position: relative;
-      overflow: hidden;
-      &::after {
-        content: '';
-        position: absolute;
-        top: 0;
-        right: 0;
-        bottom: 0;
-        left: 0;
-        transform: translateX(-100%);
-        background: linear-gradient(
-          90deg,
-          transparent,
-          rgba(255, 255, 255, 0.08),
-          transparent
-        );
-        animation: wave 1.5s infinite;
+    @keyframes pulse {
+      0%, 100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: .5;
       }
     }
 
-    .dark .skeleton-wave::after {
+    @keyframes wave {
+      0% {
+        transform: translateX(-100%);
+      }
+      50%, 100% {
+        transform: translateX(100%);
+      }
+    }
+
+    .animate-pulse {
+      animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+
+    .skeleton-wave {
       background: linear-gradient(
         90deg,
         transparent,
-        rgba(255, 255, 255, 0.04),
+        rgba(255, 255, 255, 0.1),
+        transparent
+      );
+      animation: wave 1.5s linear infinite;
+    }
+
+    .dark .skeleton-wave {
+      background: linear-gradient(
+        90deg,
+        transparent,
+        rgba(0, 0, 0, 0.1),
         transparent
       );
     }
   `]
 })
 export class SkeletonComponent {
-  @Input() type: SkeletonType = 'text';
+  @Input() variant: SkeletonVariant = 'text';
   @Input() animation: SkeletonAnimation = 'pulse';
-  @Input() width?: string;
-  @Input() height?: string;
-  @Input() rounded = false;
-  @Input() showInitials = true;
+  @Input() width: string = '100%';
+  @Input() height: string = '1rem';
   @Input() lines = 1;
   @Input() spacing = '0.5rem';
+  @Input() className = '';
 
-  getSkeletonClasses(): string {
-    const baseClasses = ['relative'];
+  getContainerClasses(): string {
+    const baseClasses = 'relative overflow-hidden bg-gray-200 dark:bg-gray-700';
+    const animationClasses = this.getAnimationClasses();
 
-    // Animation classes
-    if (this.animation === 'pulse') {
-      baseClasses.push('animate-pulse');
-    } else if (this.animation === 'wave') {
-      baseClasses.push('skeleton-wave');
-    }
+    return `
+      ${baseClasses}
+      ${animationClasses}
+      ${this.className}
+    `;
+  }
 
-    // Type-specific classes
-    switch (this.type) {
-      case 'text':
-        if (!this.height) baseClasses.push('h-4');
-        if (!this.width) baseClasses.push('w-full');
-        baseClasses.push('rounded');
-        break;
-
-      case 'circle':
-        if (!this.height) baseClasses.push('h-12');
-        if (!this.width) baseClasses.push('w-12');
-        baseClasses.push('rounded-full');
-        break;
-
-      case 'avatar':
-        if (!this.height) baseClasses.push('h-10');
-        if (!this.width) baseClasses.push('w-10');
-        baseClasses.push('rounded-full');
-        break;
-
-      case 'button':
-        if (!this.height) baseClasses.push('h-10');
-        if (!this.width) baseClasses.push('w-24');
-        baseClasses.push('rounded-md');
-        break;
-
-      case 'card':
-        if (!this.height) baseClasses.push('h-96');
-        if (!this.width) baseClasses.push('w-72');
-        baseClasses.push('rounded-lg overflow-hidden');
-        break;
-
+  getAnimationClasses(): string {
+    switch (this.animation) {
+      case 'pulse':
+        return 'animate-pulse';
+      case 'wave':
+        return 'relative overflow-hidden';
       default:
-        if (!this.height) baseClasses.push('h-4');
-        if (!this.width) baseClasses.push('w-full');
-        break;
+        return '';
     }
-
-    return baseClasses.join(' ');
   }
 
   getBorderRadius(): string {
-    if (this.type === 'circle' || this.type === 'avatar') {
-      return '50%';
+    switch (this.variant) {
+      case 'circular':
+        return '50%';
+      case 'rounded':
+        return '0.5rem';
+      case 'rectangular':
+        return '0';
+      case 'text':
+        return '0.25rem';
+      default:
+        return '0';
     }
-    if (this.rounded) {
-      return '0.375rem';
-    }
-    return this.type === 'text' ? '0.25rem' : '0';
   }
 
-  // Helper method to set type
-  setType(type: SkeletonType): void {
-    this.type = type;
+  // Helper method to set variant
+  setVariant(variant: SkeletonVariant): void {
+    this.variant = variant;
   }
 
   // Helper method to set animation
@@ -168,77 +120,48 @@ export class SkeletonComponent {
   }
 
   // Helper method to set dimensions
-  setDimensions(width?: string, height?: string): void {
+  setDimensions(width: string, height: string): void {
     this.width = width;
     this.height = height;
   }
 
-  // Helper method to toggle rounded
-  toggleRounded(): void {
-    this.rounded = !this.rounded;
+  // Helper method to set lines
+  setLines(lines: number): void {
+    this.lines = lines;
   }
 
-  // Helper method to get dimensions
-  getDimensions(): { width: string; height: string } {
-    return {
-      width: this.width || this.getDefaultWidth(),
-      height: this.height || this.getDefaultHeight()
-    };
+  // Helper method to set spacing
+  setSpacing(spacing: string): void {
+    this.spacing = spacing;
   }
 
-  // Helper method to get default width
-  private getDefaultWidth(): string {
-    switch (this.type) {
-      case 'circle':
-      case 'avatar':
-        return '2.5rem';
-      case 'button':
-        return '6rem';
-      case 'card':
-        return '18rem';
-      default:
-        return '100%';
+  // Helper method to add class
+  addClass(className: string): void {
+    this.className = `${this.className} ${className}`.trim();
+  }
+
+  // Helper method to remove class
+  removeClass(className: string): void {
+    this.className = this.className
+      .split(' ')
+      .filter(c => c !== className)
+      .join(' ');
+  }
+
+  // Helper method to toggle animation
+  toggleAnimation(enable: boolean): void {
+    this.animation = enable ? 'pulse' : 'none';
+  }
+
+  // Helper method to get computed height
+  getComputedHeight(): string {
+    if (this.lines > 1) {
+      const lineHeight = parseFloat(this.height);
+      const spacingValue = parseFloat(this.spacing);
+      const totalSpacing = (this.lines - 1) * spacingValue;
+      return `calc(${this.lines} * ${this.height} + ${totalSpacing}px)`;
     }
-  }
-
-  // Helper method to get default height
-  private getDefaultHeight(): string {
-    switch (this.type) {
-      case 'circle':
-      case 'avatar':
-        return '2.5rem';
-      case 'button':
-        return '2.5rem';
-      case 'card':
-        return '24rem';
-      default:
-        return '1rem';
-    }
-  }
-
-  // Helper method to create text lines
-  getTextLines(): number[] {
-    return Array(this.lines).fill(0);
-  }
-
-  // Helper method to get line width
-  getLineWidth(index: number): string {
-    if (index === this.lines - 1) {
-      return '75%';
-    }
-    return '100%';
-  }
-
-  // Helper method to get animation duration
-  getAnimationDuration(): number {
-    switch (this.animation) {
-      case 'pulse':
-        return 1500;
-      case 'wave':
-        return 1500;
-      default:
-        return 0;
-    }
+    return this.height;
   }
 
   // Helper method to check if animated
@@ -246,25 +169,63 @@ export class SkeletonComponent {
     return this.animation !== 'none';
   }
 
-  // Helper method to get theme classes
-  getThemeClasses(): string {
-    return 'bg-gray-200 dark:bg-gray-700';
+  // Helper method to get animation duration
+  getAnimationDuration(): string {
+    switch (this.animation) {
+      case 'pulse':
+        return '2s';
+      case 'wave':
+        return '1.5s';
+      default:
+        return '0s';
+    }
   }
 
-  // Helper method to create paragraph skeleton
-  static createParagraph(lines: number = 3): any[] {
-    return Array(lines).fill(0).map((_, i) => ({
-      type: 'text' as SkeletonType,
-      width: i === lines - 1 ? '75%' : '100%'
-    }));
+  // Helper method to get animation timing
+  getAnimationTiming(): string {
+    switch (this.animation) {
+      case 'pulse':
+        return 'cubic-bezier(0.4, 0, 0.6, 1)';
+      case 'wave':
+        return 'linear';
+      default:
+        return 'linear';
+    }
   }
 
-  // Helper method to create card skeleton
-  static createCard(): any {
+  // Helper method to create text skeleton
+  static createText(lines: number = 1, width: string = '100%'): any {
     return {
-      type: 'card' as SkeletonType,
-      width: '18rem',
-      height: '24rem'
+      variant: 'text' as SkeletonVariant,
+      lines,
+      width
+    };
+  }
+
+  // Helper method to create avatar skeleton
+  static createAvatar(size: string = '40px'): any {
+    return {
+      variant: 'circular' as SkeletonVariant,
+      width: size,
+      height: size
+    };
+  }
+
+  // Helper method to create image skeleton
+  static createImage(width: string, height: string): any {
+    return {
+      variant: 'rectangular' as SkeletonVariant,
+      width,
+      height
+    };
+  }
+
+  // Helper method to create button skeleton
+  static createButton(width: string = '100px', height: string = '36px'): any {
+    return {
+      variant: 'rounded' as SkeletonVariant,
+      width,
+      height
     };
   }
 }
