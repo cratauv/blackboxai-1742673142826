@@ -7,155 +7,236 @@ import { FormsModule } from '@angular/forms';
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="flex items-center">
+    <div class="inline-flex items-center" [class.opacity-50]="disabled">
       <!-- Decrease Button -->
       <button
         type="button"
+        [class]="getButtonClasses('left')"
+        [disabled]="isDecrementDisabled()"
         (click)="decrease()"
-        [disabled]="quantity <= min || disabled"
-        class="w-8 h-8 flex items-center justify-center rounded-l border"
-        [class.opacity-50]="quantity <= min || disabled"
-        [class.cursor-not-allowed]="quantity <= min || disabled"
-        [class.hover:bg-gray-100]="quantity > min && !disabled"
-        [class.bg-gray-50]="disabled"
       >
-        <i class="fas fa-minus text-gray-600"></i>
+        <span class="sr-only">Decrease quantity</span>
+        <i class="fas fa-minus"></i>
       </button>
 
-      <!-- Quantity Input -->
+      <!-- Input Field -->
       <input
         type="number"
-        [(ngModel)]="quantity"
-        (ngModelChange)="onQuantityChange($event)"
+        [class]="getInputClasses()"
         [min]="min"
         [max]="max"
+        [step]="step"
+        [(ngModel)]="quantity"
+        (ngModelChange)="onInputChange($event)"
+        (blur)="onBlur()"
         [disabled]="disabled"
-        class="w-16 h-8 text-center border-y focus:outline-none focus:ring-1 focus:ring-primary-500"
-        [class.bg-gray-50]="disabled"
-      />
+      >
 
       <!-- Increase Button -->
       <button
         type="button"
+        [class]="getButtonClasses('right')"
+        [disabled]="isIncrementDisabled()"
         (click)="increase()"
-        [disabled]="quantity >= max || disabled"
-        class="w-8 h-8 flex items-center justify-center rounded-r border"
-        [class.opacity-50]="quantity >= max || disabled"
-        [class.cursor-not-allowed]="quantity >= max || disabled"
-        [class.hover:bg-gray-100]="quantity < max && !disabled"
-        [class.bg-gray-50]="disabled"
       >
-        <i class="fas fa-plus text-gray-600"></i>
+        <span class="sr-only">Increase quantity</span>
+        <i class="fas fa-plus"></i>
       </button>
 
       <!-- Stock Warning -->
-      @if (showStockWarning && quantity >= stockThreshold && stockCount) {
-        <span class="ml-2 text-sm text-orange-500">
-          Only {{ stockCount - quantity }} left
-        </span>
-      }
-
-      <!-- Max Quantity Warning -->
-      @if (showMaxWarning && quantity >= max) {
-        <span class="ml-2 text-sm text-red-500">
-          Max quantity reached
+      @if (showStockWarning && max !== undefined && quantity >= max) {
+        <span class="ml-2 text-sm text-warning-600">
+          Max stock reached
         </span>
       }
     </div>
-
-    <!-- Error Message -->
-    @if (errorMessage) {
-      <p class="mt-1 text-sm text-red-500">{{ errorMessage }}</p>
-    }
-  `,
-  styles: [`
-    /* Hide number input spinners */
-    input[type=number]::-webkit-inner-spin-button,
-    input[type=number]::-webkit-outer-spin-button {
-      -webkit-appearance: none;
-      margin: 0;
-    }
-    input[type=number] {
-      -moz-appearance: textfield;
-    }
-  `]
+  `
 })
 export class QuantitySelectorComponent {
   @Input() quantity = 1;
   @Input() min = 1;
-  @Input() max = 99;
+  @Input() max?: number;
+  @Input() step = 1;
+  @Input() size: 'sm' | 'md' | 'lg' = 'md';
   @Input() disabled = false;
   @Input() showStockWarning = true;
-  @Input() showMaxWarning = true;
-  @Input() stockCount?: number;
-  @Input() stockThreshold = 5;
+  @Input() variant: 'default' | 'outline' | 'filled' = 'default';
 
   @Output() quantityChange = new EventEmitter<number>();
+  @Output() increment = new EventEmitter<void>();
+  @Output() decrement = new EventEmitter<void>();
 
-  errorMessage = '';
+  getButtonClasses(position: 'left' | 'right'): string {
+    const baseClasses = 'flex items-center justify-center focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500';
+    
+    const sizeClasses = {
+      sm: 'p-1',
+      md: 'p-2',
+      lg: 'p-3'
+    };
+
+    const variantClasses = {
+      default: 'bg-gray-100 hover:bg-gray-200 text-gray-600',
+      outline: 'border border-gray-300 bg-white hover:bg-gray-50 text-gray-600',
+      filled: 'bg-primary-600 hover:bg-primary-700 text-white'
+    };
+
+    const positionClasses = {
+      left: 'rounded-l-md',
+      right: 'rounded-r-md'
+    };
+
+    const disabledClasses = position === 'left' 
+      ? this.isDecrementDisabled() ? 'opacity-50 cursor-not-allowed' : ''
+      : this.isIncrementDisabled() ? 'opacity-50 cursor-not-allowed' : '';
+
+    return `
+      ${baseClasses}
+      ${sizeClasses[this.size]}
+      ${variantClasses[this.variant]}
+      ${positionClasses[position]}
+      ${disabledClasses}
+    `;
+  }
+
+  getInputClasses(): string {
+    const baseClasses = 'block text-center focus:outline-none focus:ring-primary-500 focus:border-primary-500';
+    
+    const sizeClasses = {
+      sm: 'w-12 px-1 py-1 text-sm',
+      md: 'w-16 px-2 py-2 text-base',
+      lg: 'w-20 px-3 py-3 text-lg'
+    };
+
+    const variantClasses = {
+      default: 'border-gray-100 bg-gray-100',
+      outline: 'border-gray-300 bg-white',
+      filled: 'border-primary-600 bg-white'
+    };
+
+    return `
+      ${baseClasses}
+      ${sizeClasses[this.size]}
+      ${variantClasses[this.variant]}
+    `;
+  }
 
   increase(): void {
-    if (this.quantity < this.max && !this.disabled) {
-      this.updateQuantity(this.quantity + 1);
+    if (!this.isIncrementDisabled()) {
+      this.quantity += this.step;
+      this.emitChanges();
+      this.increment.emit();
     }
   }
 
   decrease(): void {
-    if (this.quantity > this.min && !this.disabled) {
-      this.updateQuantity(this.quantity - 1);
+    if (!this.isDecrementDisabled()) {
+      this.quantity -= this.step;
+      this.emitChanges();
+      this.decrement.emit();
     }
   }
 
-  onQuantityChange(value: number): void {
-    this.updateQuantity(value);
+  onInputChange(value: number): void {
+    this.validateAndUpdateQuantity(value);
+    this.emitChanges();
   }
 
-  private updateQuantity(value: number): void {
-    // Validate input
-    if (isNaN(value)) {
-      this.errorMessage = 'Please enter a valid number';
-      return;
-    }
-
-    // Round to nearest integer
-    value = Math.round(value);
-
-    // Enforce min/max constraints
-    if (value < this.min) {
-      value = this.min;
-      this.errorMessage = `Minimum quantity is ${this.min}`;
-    } else if (value > this.max) {
-      value = this.max;
-      this.errorMessage = `Maximum quantity is ${this.max}`;
-    } else {
-      this.errorMessage = '';
-    }
-
-    // Check stock availability
-    if (this.stockCount !== undefined && value > this.stockCount) {
-      value = this.stockCount;
-      this.errorMessage = `Only ${this.stockCount} items available`;
-    }
-
-    // Update quantity and emit change
-    if (this.quantity !== value) {
-      this.quantity = value;
-      this.quantityChange.emit(value);
-    }
+  onBlur(): void {
+    this.validateAndUpdateQuantity(this.quantity);
+    this.emitChanges();
   }
 
-  // Helper method to check if at minimum quantity
-  isAtMinimum(): boolean {
+  private validateAndUpdateQuantity(value: number): void {
+    let newValue = Math.round(value / this.step) * this.step;
+    
+    if (this.min !== undefined && newValue < this.min) {
+      newValue = this.min;
+    }
+    
+    if (this.max !== undefined && newValue > this.max) {
+      newValue = this.max;
+    }
+
+    this.quantity = newValue;
+  }
+
+  private emitChanges(): void {
+    this.quantityChange.emit(this.quantity);
+  }
+
+  isDecrementDisabled(): boolean {
+    return this.disabled || this.quantity <= this.min;
+  }
+
+  isIncrementDisabled(): boolean {
+    return this.disabled || (this.max !== undefined && this.quantity >= this.max);
+  }
+
+  // Helper method to set quantity
+  setQuantity(quantity: number): void {
+    this.validateAndUpdateQuantity(quantity);
+    this.emitChanges();
+  }
+
+  // Helper method to set min value
+  setMin(min: number): void {
+    this.min = min;
+    this.validateAndUpdateQuantity(this.quantity);
+    this.emitChanges();
+  }
+
+  // Helper method to set max value
+  setMax(max: number): void {
+    this.max = max;
+    this.validateAndUpdateQuantity(this.quantity);
+    this.emitChanges();
+  }
+
+  // Helper method to set step value
+  setStep(step: number): void {
+    this.step = step;
+    this.validateAndUpdateQuantity(this.quantity);
+    this.emitChanges();
+  }
+
+  // Helper method to set size
+  setSize(size: 'sm' | 'md' | 'lg'): void {
+    this.size = size;
+  }
+
+  // Helper method to set variant
+  setVariant(variant: 'default' | 'outline' | 'filled'): void {
+    this.variant = variant;
+  }
+
+  // Helper method to enable/disable
+  setDisabled(disabled: boolean): void {
+    this.disabled = disabled;
+  }
+
+  // Helper method to toggle stock warning
+  toggleStockWarning(show: boolean): void {
+    this.showStockWarning = show;
+  }
+
+  // Helper method to get current quantity
+  getQuantity(): number {
+    return this.quantity;
+  }
+
+  // Helper method to check if at min
+  isAtMin(): boolean {
     return this.quantity <= this.min;
   }
 
-  // Helper method to check if at maximum quantity
-  isAtMaximum(): boolean {
-    return this.quantity >= this.max;
+  // Helper method to check if at max
+  isAtMax(): boolean {
+    return this.max !== undefined && this.quantity >= this.max;
   }
 
-  // Helper method to check if quantity is low in stock
-  isLowStock(): boolean {
-    return !!this.stockCount && this.quantity >= this.stockThreshold;
+  // Helper method to reset to min
+  reset(): void {
+    this.setQuantity(this.min);
   }
 }
