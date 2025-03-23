@@ -1,8 +1,8 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-export interface TreeNode {
-  id: string;
+interface TreeNode {
+  id: string | number;
   label: string;
   icon?: string;
   children?: TreeNode[];
@@ -23,70 +23,64 @@ export interface TreeNode {
         <div>
           <!-- Node -->
           <div
-            class="group flex items-center"
+            class="flex items-center py-1 px-2 rounded-md"
             [class]="getNodeClasses(node)"
-            [class.pl-4]="level > 0"
             [class.cursor-pointer]="!node.disabled"
-            (click)="onNodeClick(node)"
+            (click)="onNodeClick($event, node)"
           >
             <!-- Expand/Collapse Icon -->
             @if (hasChildren(node)) {
               <button
                 type="button"
-                class="mr-1 p-1 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                [class.cursor-not-allowed]="node.disabled"
+                class="w-4 h-4 flex items-center justify-center mr-1 text-gray-400 hover:text-gray-600"
+                [class.opacity-50]="node.disabled"
                 (click)="onExpandClick($event, node)"
               >
-                <i 
-                  class="fas text-gray-400 transition-transform duration-200"
+                <i
+                  class="fas"
                   [class.fa-chevron-right]="!node.expanded"
                   [class.fa-chevron-down]="node.expanded"
-                  [class.text-gray-300]="node.disabled"
                 ></i>
               </button>
             } @else {
-              <span class="w-7"></span>
+              <div class="w-4 mr-1"></div>
+            }
+
+            <!-- Loading Indicator -->
+            @if (node.loading) {
+              <div class="w-4 h-4 mr-2">
+                <div class="w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
             }
 
             <!-- Node Icon -->
             @if (node.icon) {
-              <i 
-                [class]="node.icon"
-                class="mr-2 text-gray-400 group-hover:text-gray-500"
-                [class.text-gray-300]="node.disabled"
-              ></i>
+              <i [class]="node.icon" class="mr-2 text-gray-400"></i>
             }
 
             <!-- Node Label -->
-            <span 
-              class="flex-1 truncate"
-              [class.text-gray-400]="node.disabled"
-            >
-              {{ node.label }}
-            </span>
+            <span class="truncate">{{ node.label }}</span>
 
-            <!-- Loading Indicator -->
-            @if (node.loading) {
-              <div class="ml-2 h-4 w-4 animate-spin rounded-full border-2 border-gray-300 border-t-primary-500"></div>
-            }
-
-            <!-- Actions -->
-            @if (!node.disabled && showActions) {
-              <div class="ml-2 flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <ng-content select="[treeNodeActions]"></ng-content>
+            <!-- Custom Actions -->
+            @if (showActions && !node.disabled) {
+              <div class="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                <ng-container
+                  [ngTemplateOutlet]="actionTemplate"
+                  [ngTemplateOutletContext]="{ $implicit: node }"
+                ></ng-container>
               </div>
             }
           </div>
 
           <!-- Children -->
           @if (node.expanded && node.children?.length) {
-            <div class="mt-1">
+            <div class="ml-6 mt-1">
               <app-tree
                 [nodes]="node.children"
-                [level]="level + 1"
-                [showActions]="showActions"
                 [selectable]="selectable"
                 [multiSelect]="multiSelect"
+                [showActions]="showActions"
+                [actionTemplate]="actionTemplate"
                 (nodeClick)="onChildNodeClick($event)"
                 (nodeExpand)="onChildNodeExpand($event)"
                 (nodeSelect)="onChildNodeSelect($event)"
@@ -100,42 +94,43 @@ export interface TreeNode {
 })
 export class TreeComponent {
   @Input() nodes: TreeNode[] = [];
-  @Input() level = 0;
-  @Input() showActions = false;
   @Input() selectable = false;
   @Input() multiSelect = false;
+  @Input() showActions = false;
+  @Input() actionTemplate: any;
 
   @Output() nodeClick = new EventEmitter<TreeNode>();
   @Output() nodeExpand = new EventEmitter<TreeNode>();
-  @Output() nodeSelect = new EventEmitter<TreeNode[]>();
+  @Output() nodeSelect = new EventEmitter<TreeNode>();
 
   getNodeClasses(node: TreeNode): string {
     return `
-      py-1
-      ${node.disabled ? 'cursor-not-allowed' : 'hover:bg-gray-50'}
-      ${node.selected ? 'bg-primary-50' : ''}
-    `.trim();
+      group
+      ${node.disabled ? 'opacity-50 cursor-not-allowed' : ''}
+      ${node.selected ? 'bg-primary-50 text-primary-900' : 'hover:bg-gray-50'}
+      ${this.selectable && !node.disabled ? 'cursor-pointer' : ''}
+    `;
   }
 
   hasChildren(node: TreeNode): boolean {
     return !!node.children?.length;
   }
 
-  onNodeClick(node: TreeNode): void {
-    if (!node.disabled) {
-      this.nodeClick.emit(node);
-      if (this.selectable) {
-        this.toggleNodeSelection(node);
-      }
+  onNodeClick(event: MouseEvent, node: TreeNode): void {
+    if (node.disabled) return;
+
+    if (this.selectable) {
+      this.toggleNodeSelection(node);
     }
+    this.nodeClick.emit(node);
   }
 
-  onExpandClick(event: Event, node: TreeNode): void {
+  onExpandClick(event: MouseEvent, node: TreeNode): void {
     event.stopPropagation();
-    if (!node.disabled) {
-      node.expanded = !node.expanded;
-      this.nodeExpand.emit(node);
-    }
+    if (node.disabled) return;
+
+    node.expanded = !node.expanded;
+    this.nodeExpand.emit(node);
   }
 
   onChildNodeClick(node: TreeNode): void {
@@ -146,136 +141,136 @@ export class TreeComponent {
     this.nodeExpand.emit(node);
   }
 
-  onChildNodeSelect(nodes: TreeNode[]): void {
-    this.nodeSelect.emit(nodes);
+  onChildNodeSelect(node: TreeNode): void {
+    this.nodeSelect.emit(node);
   }
 
   private toggleNodeSelection(node: TreeNode): void {
     if (!this.multiSelect) {
-      // Single selection mode
-      this.clearAllSelections();
-      node.selected = true;
-      this.nodeSelect.emit([node]);
-    } else {
-      // Multi selection mode
-      node.selected = !node.selected;
-      this.nodeSelect.emit(this.getSelectedNodes());
+      this.clearSelection(this.nodes);
     }
+    node.selected = !node.selected;
+    this.nodeSelect.emit(node);
   }
 
-  private clearAllSelections(): void {
-    const clearNodes = (nodes: TreeNode[]) => {
-      nodes.forEach(node => {
-        node.selected = false;
-        if (node.children) {
-          clearNodes(node.children);
-        }
-      });
-    };
-    clearNodes(this.nodes);
+  private clearSelection(nodes: TreeNode[]): void {
+    nodes.forEach(node => {
+      node.selected = false;
+      if (node.children?.length) {
+        this.clearSelection(node.children);
+      }
+    });
   }
 
-  private getSelectedNodes(): TreeNode[] {
-    const selected: TreeNode[] = [];
-    const findSelected = (nodes: TreeNode[]) => {
-      nodes.forEach(node => {
-        if (node.selected) {
-          selected.push(node);
-        }
-        if (node.children) {
-          findSelected(node.children);
-        }
-      });
-    };
-    findSelected(this.nodes);
-    return selected;
+  // Helper method to expand node
+  expandNode(nodeId: string | number): void {
+    this.findAndUpdateNode(this.nodes, nodeId, node => {
+      node.expanded = true;
+      this.nodeExpand.emit(node);
+    });
+  }
+
+  // Helper method to collapse node
+  collapseNode(nodeId: string | number): void {
+    this.findAndUpdateNode(this.nodes, nodeId, node => {
+      node.expanded = false;
+      this.nodeExpand.emit(node);
+    });
+  }
+
+  // Helper method to select node
+  selectNode(nodeId: string | number): void {
+    if (!this.selectable) return;
+
+    this.findAndUpdateNode(this.nodes, nodeId, node => {
+      if (!this.multiSelect) {
+        this.clearSelection(this.nodes);
+      }
+      node.selected = true;
+      this.nodeSelect.emit(node);
+    });
+  }
+
+  // Helper method to deselect node
+  deselectNode(nodeId: string | number): void {
+    this.findAndUpdateNode(this.nodes, nodeId, node => {
+      node.selected = false;
+      this.nodeSelect.emit(node);
+    });
   }
 
   // Helper method to expand all nodes
   expandAll(): void {
-    const expand = (nodes: TreeNode[]) => {
-      nodes.forEach(node => {
-        if (this.hasChildren(node)) {
-          node.expanded = true;
-          expand(node.children!);
-        }
-      });
-    };
-    expand(this.nodes);
+    this.updateAllNodes(this.nodes, node => {
+      if (this.hasChildren(node)) {
+        node.expanded = true;
+        this.nodeExpand.emit(node);
+      }
+    });
   }
 
   // Helper method to collapse all nodes
   collapseAll(): void {
-    const collapse = (nodes: TreeNode[]) => {
-      nodes.forEach(node => {
-        if (this.hasChildren(node)) {
-          node.expanded = false;
-          collapse(node.children!);
-        }
-      });
-    };
-    collapse(this.nodes);
+    this.updateAllNodes(this.nodes, node => {
+      node.expanded = false;
+      this.nodeExpand.emit(node);
+    });
+  }
+
+  // Helper method to get selected nodes
+  getSelectedNodes(): TreeNode[] {
+    const selected: TreeNode[] = [];
+    this.traverseNodes(this.nodes, node => {
+      if (node.selected) {
+        selected.push(node);
+      }
+    });
+    return selected;
   }
 
   // Helper method to find node by id
-  findNode(id: string): TreeNode | undefined {
-    const find = (nodes: TreeNode[]): TreeNode | undefined => {
-      for (const node of nodes) {
-        if (node.id === id) return node;
-        if (node.children) {
-          const found = find(node.children);
-          if (found) return found;
-        }
+  findNode(nodeId: string | number): TreeNode | undefined {
+    let found: TreeNode | undefined;
+    this.traverseNodes(this.nodes, node => {
+      if (node.id === nodeId) {
+        found = node;
       }
-      return undefined;
-    };
-    return find(this.nodes);
+    });
+    return found;
   }
 
-  // Helper method to get node level
-  getNodeLevel(node: TreeNode): number {
-    let level = 0;
-    const find = (nodes: TreeNode[], targetId: string, currentLevel: number): number => {
-      for (const n of nodes) {
-        if (n.id === targetId) return currentLevel;
-        if (n.children) {
-          const foundLevel = find(n.children, targetId, currentLevel + 1);
-          if (foundLevel >= 0) return foundLevel;
-        }
+  // Helper method to traverse nodes
+  private traverseNodes(nodes: TreeNode[], callback: (node: TreeNode) => void): void {
+    nodes.forEach(node => {
+      callback(node);
+      if (node.children?.length) {
+        this.traverseNodes(node.children, callback);
       }
-      return -1;
-    };
-    return find(this.nodes, node.id, 0);
+    });
   }
 
-  // Helper method to get parent node
-  getParentNode(node: TreeNode): TreeNode | undefined {
-    const find = (nodes: TreeNode[], parent?: TreeNode): TreeNode | undefined => {
-      for (const n of nodes) {
-        if (n.id === node.id) return parent;
-        if (n.children) {
-          const found = find(n.children, n);
-          if (found) return found;
-        }
+  // Helper method to find and update node
+  private findAndUpdateNode(
+    nodes: TreeNode[],
+    nodeId: string | number,
+    callback: (node: TreeNode) => void
+  ): void {
+    nodes.forEach(node => {
+      if (node.id === nodeId) {
+        callback(node);
+      } else if (node.children?.length) {
+        this.findAndUpdateNode(node.children, nodeId, callback);
       }
-      return undefined;
-    };
-    return find(this.nodes);
+    });
   }
 
-  // Helper method to get node path
-  getNodePath(node: TreeNode): TreeNode[] {
-    const path: TreeNode[] = [];
-    const find = (nodes: TreeNode[], targetId: string, currentPath: TreeNode[]): boolean => {
-      for (const n of nodes) {
-        currentPath.push(n);
-        if (n.id === targetId) return true;
-        if (n.children && find(n.children, targetId, currentPath)) return true;
-        currentPath.pop();
+  // Helper method to update all nodes
+  private updateAllNodes(nodes: TreeNode[], callback: (node: TreeNode) => void): void {
+    nodes.forEach(node => {
+      callback(node);
+      if (node.children?.length) {
+        this.updateAllNodes(node.children, callback);
       }
-      return false;
-    };
-    find(this.nodes, node.id, path);
-    return path;
+    });
   }
 }
