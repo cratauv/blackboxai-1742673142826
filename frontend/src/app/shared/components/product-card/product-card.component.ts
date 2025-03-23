@@ -1,163 +1,265 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
-import { Product } from '../../../core/services/product.service';
-import { CartService } from '../../../core/services/cart.service';
-import { NotificationService } from '../../../core/services/notification.service';
+import { RouterModule } from '@angular/router';
+
+export interface ProductCardData {
+  id: string;
+  name: string;
+  description?: string;
+  price: number;
+  originalPrice?: number;
+  image: string;
+  rating?: number;
+  reviewCount?: number;
+  inStock?: boolean;
+  stockCount?: number;
+  badges?: string[];
+  category?: string;
+  brand?: string;
+}
 
 @Component({
   selector: 'app-product-card',
   standalone: true,
-  imports: [CommonModule, RouterLink],
+  imports: [CommonModule, RouterModule],
   template: `
-    <div class="bg-white rounded-lg shadow-md overflow-hidden transition-transform hover:scale-105 hover:shadow-lg">
-      <!-- Product Image -->
-      <div class="relative aspect-w-1 aspect-h-1 group">
-        <img 
-          [src]="product.images[0]?.url || 'assets/images/placeholder.jpg'"
-          [alt]="product.name"
-          class="object-cover w-full h-full"
-        />
-        
-        <!-- Quick Actions Overlay -->
-        <div class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-          <div class="space-x-4">
-            <!-- View Details -->
-            <a 
-              [routerLink]="['/products', product._id]"
-              class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-white text-primary-600 hover:bg-primary-600 hover:text-white transition-colors"
-            >
-              <i class="fas fa-eye"></i>
-            </a>
-            
-            <!-- Add to Cart -->
-            <button 
-              (click)="addToCart()"
-              class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-white text-primary-600 hover:bg-primary-600 hover:text-white transition-colors"
-              [class.opacity-50]="!product.stock"
-              [disabled]="!product.stock"
-            >
-              <i class="fas fa-shopping-cart"></i>
-            </button>
-          </div>
+    <div
+      class="group relative bg-white rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200"
+      [class.opacity-75]="!product.inStock"
+    >
+      <!-- Badges -->
+      @if (product.badges && product.badges.length > 0) {
+        <div class="absolute top-2 left-2 z-10 flex flex-col gap-1">
+          @for (badge of product.badges; track badge) {
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-primary-100 text-primary-800">
+              {{ badge }}
+            </span>
+          }
         </div>
+      }
 
-        <!-- Stock Badge -->
-        @if (!product.stock) {
-          <span class="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded text-sm">
-            Out of Stock
-          </span>
-        }
+      <!-- Wishlist Button -->
+      @if (showWishlist) {
+        <button
+          type="button"
+          class="absolute top-2 right-2 z-10 p-2 rounded-full bg-white shadow-sm hover:bg-gray-50"
+          (click)="onWishlistClick($event)"
+        >
+          <i
+            class="text-gray-400 hover:text-primary-500"
+            [class]="isWishlisted ? 'fas fa-heart text-primary-500' : 'far fa-heart'"
+          ></i>
+        </button>
+      }
 
-        <!-- Discount Badge -->
-        @if (hasDiscount) {
-          <span class="absolute top-2 left-2 bg-green-500 text-white px-2 py-1 rounded text-sm">
-            {{ discountPercentage }}% OFF
-          </span>
-        }
+      <!-- Image -->
+      <div class="aspect-w-1 aspect-h-1 w-full overflow-hidden rounded-t-lg">
+        <img
+          [src]="product.image"
+          [alt]="product.name"
+          class="h-full w-full object-cover object-center group-hover:opacity-75 transition-opacity duration-200"
+        >
       </div>
 
-      <!-- Product Info -->
+      <!-- Content -->
       <div class="p-4">
-        <!-- Category -->
-        <p class="text-sm text-gray-500 mb-2">{{ product.category }}</p>
-        
+        <!-- Category & Brand -->
+        @if (product.category || product.brand) {
+          <div class="text-sm text-gray-500 mb-1">
+            {{ [product.category, product.brand].filter(Boolean).join(' • ') }}
+          </div>
+        }
+
         <!-- Name -->
-        <h3 class="text-lg font-semibold mb-2 line-clamp-2">
-          <a [routerLink]="['/products', product._id]" class="hover:text-primary-600">
+        <h3 class="text-sm font-medium text-gray-900">
+          <a [routerLink]="['/products', product.id]">
             {{ product.name }}
           </a>
         </h3>
 
-        <!-- Price -->
-        <div class="flex items-baseline mb-2">
-          <span class="text-xl font-bold text-primary-600">${{ discountedPrice }}</span>
-          @if (hasDiscount) {
-            <span class="ml-2 text-sm text-gray-500 line-through">${{ product.price }}</span>
-          }
-        </div>
+        <!-- Description -->
+        @if (product.description) {
+          <p class="mt-1 text-sm text-gray-500 line-clamp-2">
+            {{ product.description }}
+          </p>
+        }
 
         <!-- Rating -->
-        <div class="flex items-center mb-4">
-          <div class="flex text-yellow-400">
-            @for (star of [1,2,3,4,5]; track star) {
-              <i class="fas fa-star" [class.text-gray-300]="star > averageRating"></i>
+        @if (showRating && product.rating !== undefined) {
+          <div class="mt-2 flex items-center">
+            <div class="flex items-center">
+              @for (star of [1,2,3,4,5]; track star) {
+                <i
+                  class="text-sm"
+                  [class]="star <= product.rating ? 'fas fa-star text-yellow-400' : 'far fa-star text-gray-300'"
+                ></i>
+              }
+            </div>
+            @if (product.reviewCount) {
+              <span class="ml-2 text-sm text-gray-500">
+                ({{ product.reviewCount }})
+              </span>
             }
           </div>
-          <span class="ml-2 text-sm text-gray-600">({{ product.ratings?.length || 0 }})</span>
+        }
+
+        <!-- Price -->
+        <div class="mt-2 flex items-center justify-between">
+          <div>
+            <span class="text-base font-medium text-gray-900">
+              {{ formatPrice(product.price) }}
+            </span>
+            @if (product.originalPrice) {
+              <span class="ml-2 text-sm text-gray-500 line-through">
+                {{ formatPrice(product.originalPrice) }}
+              </span>
+            }
+          </div>
+
+          <!-- Stock Status -->
+          @if (showStock) {
+            <div class="text-sm">
+              @if (product.inStock) {
+                <span class="text-success-600">In Stock</span>
+                @if (product.stockCount) {
+                  <span class="text-gray-500">
+                    ({{ product.stockCount }})
+                  </span>
+                }
+              } @else {
+                <span class="text-error-600">Out of Stock</span>
+              }
+            </div>
+          }
         </div>
 
         <!-- Add to Cart Button -->
-        <button
-          (click)="addToCart()"
-          class="w-full bg-primary-600 text-white py-2 rounded-md hover:bg-primary-700 transition-colors"
-          [class.opacity-50]="!product.stock"
-          [disabled]="!product.stock"
-        >
-          @if (product.stock) {
+        @if (showAddToCart) {
+          <button
+            type="button"
+            class="mt-4 w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            [disabled]="!product.inStock"
+            (click)="onAddToCart($event)"
+          >
+            <i class="fas fa-shopping-cart mr-2"></i>
             Add to Cart
-          } @else {
-            Out of Stock
-          }
-        </button>
+          </button>
+        }
       </div>
     </div>
-  `,
-  styles: [`
-    :host {
-      display: block;
-    }
-
-    .line-clamp-2 {
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-  `]
+  `
 })
 export class ProductCardComponent {
-  @Input() product!: Product;
-  @Output() addToCartEvent = new EventEmitter<void>();
+  @Input() product!: ProductCardData;
+  @Input() showRating = true;
+  @Input() showStock = true;
+  @Input() showWishlist = true;
+  @Input() showAddToCart = true;
+  @Input() isWishlisted = false;
+  @Input() currency = 'USD';
 
-  constructor(
-    private cartService: CartService,
-    private notificationService: NotificationService
-  ) {}
+  @Output() addToCart = new EventEmitter<ProductCardData>();
+  @Output() wishlistToggle = new EventEmitter<ProductCardData>();
 
-  get hasDiscount(): boolean {
-    return !!(
-      this.product.discounts?.percentage &&
-      this.product.discounts?.validUntil &&
-      new Date(this.product.discounts.validUntil) > new Date()
-    );
+  formatPrice(price: number): string {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: this.currency
+    }).format(price);
   }
 
-  get discountPercentage(): number {
-    return this.product.discounts?.percentage || 0;
-  }
-
-  get discountedPrice(): number {
-    if (this.hasDiscount) {
-      return +(this.product.price * (1 - this.discountPercentage / 100)).toFixed(2);
+  onAddToCart(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    if (this.product.inStock) {
+      this.addToCart.emit(this.product);
     }
-    return this.product.price;
   }
 
-  get averageRating(): number {
-    if (!this.product.ratings?.length) return 0;
-    const sum = this.product.ratings.reduce((acc, rating) => acc + rating.rating, 0);
-    return Math.round((sum / this.product.ratings.length) * 2) / 2;
+  onWishlistClick(event: Event): void {
+    event.preventDefault();
+    event.stopPropagation();
+    this.wishlistToggle.emit(this.product);
   }
 
-  addToCart(): void {
-    if (!this.product.stock) {
-      this.notificationService.warning('This product is out of stock');
-      return;
+  // Helper method to update product data
+  updateProduct(product: Partial<ProductCardData>): void {
+    this.product = { ...this.product, ...product };
+  }
+
+  // Helper method to update stock
+  updateStock(inStock: boolean, stockCount?: number): void {
+    this.product.inStock = inStock;
+    if (stockCount !== undefined) {
+      this.product.stockCount = stockCount;
     }
+  }
 
-    this.cartService.addToCart(this.product);
-    this.notificationService.success('Product added to cart');
-    this.addToCartEvent.emit();
+  // Helper method to update price
+  updatePrice(price: number, originalPrice?: number): void {
+    this.product.price = price;
+    if (originalPrice !== undefined) {
+      this.product.originalPrice = originalPrice;
+    }
+  }
+
+  // Helper method to update rating
+  updateRating(rating: number, reviewCount?: number): void {
+    this.product.rating = rating;
+    if (reviewCount !== undefined) {
+      this.product.reviewCount = reviewCount;
+    }
+  }
+
+  // Helper method to add badge
+  addBadge(badge: string): void {
+    if (!this.product.badges) {
+      this.product.badges = [];
+    }
+    if (!this.product.badges.includes(badge)) {
+      this.product.badges.push(badge);
+    }
+  }
+
+  // Helper method to remove badge
+  removeBadge(badge: string): void {
+    if (this.product.badges) {
+      this.product.badges = this.product.badges.filter(b => b !== badge);
+    }
+  }
+
+  // Helper method to clear badges
+  clearBadges(): void {
+    this.product.badges = [];
+  }
+
+  // Helper method to toggle wishlist
+  toggleWishlist(): void {
+    this.isWishlisted = !this.isWishlisted;
+  }
+
+  // Helper method to set currency
+  setCurrency(currency: string): void {
+    this.currency = currency;
+  }
+
+  // Helper method to check if product is on sale
+  isOnSale(): boolean {
+    return !!this.product.originalPrice && this.product.originalPrice > this.product.price;
+  }
+
+  // Helper method to get discount percentage
+  getDiscountPercentage(): number {
+    if (this.product.originalPrice) {
+      return Math.round(
+        ((this.product.originalPrice - this.product.price) / this.product.originalPrice) * 100
+      );
+    }
+    return 0;
+  }
+
+  // Helper method to get rating stars array
+  getRatingStars(): boolean[] {
+    return Array(5).fill(false).map((_, i) => i < (this.product.rating || 0));
   }
 }
