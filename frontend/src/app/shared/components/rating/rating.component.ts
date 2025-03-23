@@ -1,78 +1,46 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-type RatingSymbol = 'star' | 'heart' | 'circle' | 'custom';
-type RatingSize = 'sm' | 'md' | 'lg';
-
 @Component({
   selector: 'app-rating',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div
-      class="inline-flex items-center"
-      [class.opacity-50]="disabled"
-      role="radiogroup"
-      [attr.aria-label]="label"
-    >
-      <!-- Rating Symbols -->
-      @for (item of ratingArray; track item) {
-        <button
-          type="button"
-          class="focus:outline-none transition-colors duration-200"
-          [class]="getSymbolClasses(item)"
-          [class.cursor-default]="disabled || readonly"
-          [class.cursor-pointer]="!disabled && !readonly"
-          [attr.aria-label]="getAriaLabel(item)"
-          [attr.aria-checked]="isSelected(item)"
-          (click)="onRatingClick(item)"
-          (mouseenter)="onRatingHover(item)"
-          (mouseleave)="onRatingLeave()"
+    <div class="flex items-center">
+      <!-- Stars -->
+      <div class="flex">
+        @for (star of stars; track star.value) {
+          <button
+            type="button"
+            class="p-0.5 focus:outline-none"
+            [class.cursor-pointer]="!readonly"
+            [class.cursor-default]="readonly"
+            (click)="onStarClick(star.value)"
+            (mouseenter)="onStarHover(star.value)"
+            (mouseleave)="onStarLeave()"
+          >
+            <i
+              [class]="getStarClasses(star)"
+              [style.fontSize]="size + 'px'"
+            ></i>
+          </button>
+        }
+      </div>
+
+      <!-- Label -->
+      @if (showLabel) {
+        <span
+          [class]="getLabelClasses()"
+          [style.marginLeft.px]="labelSpacing"
         >
-          @switch (symbol) {
-            @case ('star') {
-              <i 
-                class="fas"
-                [class.fa-star]="isSelected(item) || isHovered(item)"
-                [class.fa-star-half-alt]="isHalfSelected(item)"
-                [class.fa-star-o]="!isSelected(item) && !isHovered(item) && !isHalfSelected(item)"
-              ></i>
-            }
-            @case ('heart') {
-              <i 
-                class="fas"
-                [class.fa-heart]="isSelected(item) || isHovered(item)"
-                [class.fa-heart-o]="!isSelected(item) && !isHovered(item)"
-              ></i>
-            }
-            @case ('circle') {
-              <i 
-                class="fas"
-                [class.fa-circle]="isSelected(item) || isHovered(item)"
-                [class.fa-circle-o]="!isSelected(item) && !isHovered(item)"
-              ></i>
-            }
-            @case ('custom') {
-              <ng-container
-                [ngTemplateOutlet]="customSymbol"
-                [ngTemplateOutletContext]="{
-                  $implicit: item,
-                  selected: isSelected(item),
-                  hovered: isHovered(item)
-                }"
-              ></ng-container>
-            }
-          }
-        </button>
+          {{ getLabel() }}
+        </span>
       }
 
-      <!-- Rating Label -->
-      @if (showValue) {
-        <span 
-          class="ml-2"
-          [class]="getLabelClasses()"
-        >
-          {{ formatRating(value) }}
+      <!-- Review Count -->
+      @if (showCount && reviewCount !== undefined) {
+        <span class="ml-1 text-gray-500" [class]="getCountClasses()">
+          ({{ reviewCount }})
         </span>
       }
     </div>
@@ -80,170 +48,196 @@ type RatingSize = 'sm' | 'md' | 'lg';
 })
 export class RatingComponent {
   @Input() value = 0;
-  @Input() max = 5;
-  @Input() symbol: RatingSymbol = 'star';
-  @Input() size: RatingSize = 'md';
-  @Input() color = 'primary';
-  @Input() disabled = false;
+  @Input() maxValue = 5;
+  @Input() size = 20;
+  @Input() color = '#FCD34D'; // Tailwind yellow-300
+  @Input() inactiveColor = '#E5E7EB'; // Tailwind gray-200
+  @Input() hoverColor = '#FBBF24'; // Tailwind yellow-400
   @Input() readonly = false;
-  @Input() allowHalf = false;
-  @Input() showValue = false;
-  @Input() label = 'Rating';
-  @Input() customSymbol: any;
+  @Input() showLabel = false;
+  @Input() showCount = false;
+  @Input() reviewCount?: number;
+  @Input() labelSpacing = 8;
+  @Input() precision = 0.5;
+  @Input() labels: Record<number, string> = {
+    0: 'No rating',
+    1: 'Poor',
+    2: 'Fair',
+    3: 'Average',
+    4: 'Good',
+    5: 'Excellent'
+  };
 
-  @Output() valueChange = new EventEmitter<number>();
-  @Output() hover = new EventEmitter<number>();
+  @Output() ratingChange = new EventEmitter<number>();
+  @Output() ratingHover = new EventEmitter<number>();
 
-  hoveredRating = 0;
-  ratingArray: number[] = [];
+  hoveredValue: number | null = null;
+  stars: { value: number }[] = [];
 
-  ngOnInit(): void {
-    this.updateRatingArray();
+  constructor() {
+    this.initializeStars();
   }
 
-  ngOnChanges(): void {
-    this.updateRatingArray();
+  private initializeStars(): void {
+    this.stars = Array.from({ length: this.maxValue }, (_, index) => ({
+      value: index + 1
+    }));
   }
 
-  private updateRatingArray(): void {
-    this.ratingArray = Array.from({ length: this.max }, (_, i) => i + 1);
-  }
-
-  onRatingClick(rating: number): void {
-    if (this.disabled || this.readonly) return;
-
-    let newValue = rating;
-    if (this.allowHalf) {
-      const rect = (event?.target as HTMLElement)?.getBoundingClientRect();
-      if (rect && event instanceof MouseEvent) {
-        const isLeftHalf = event.clientX - rect.left < rect.width / 2;
-        newValue = isLeftHalf ? rating - 0.5 : rating;
-      }
-    }
-
-    this.value = this.value === newValue ? 0 : newValue;
-    this.valueChange.emit(this.value);
-  }
-
-  onRatingHover(rating: number): void {
-    if (this.disabled || this.readonly) return;
-    this.hoveredRating = rating;
-    this.hover.emit(rating);
-  }
-
-  onRatingLeave(): void {
-    if (this.disabled || this.readonly) return;
-    this.hoveredRating = 0;
-    this.hover.emit(0);
-  }
-
-  isSelected(rating: number): boolean {
-    return rating <= Math.floor(this.hoveredRating || this.value);
-  }
-
-  isHalfSelected(rating: number): boolean {
-    return this.allowHalf && rating === Math.ceil(this.value) && this.value % 1 !== 0;
-  }
-
-  isHovered(rating: number): boolean {
-    return rating <= this.hoveredRating;
-  }
-
-  getSymbolClasses(rating: number): string {
-    const sizeClasses = {
-      sm: 'text-sm p-0.5',
-      md: 'text-base p-1',
-      lg: 'text-lg p-1.5'
-    };
-
-    const colorClasses = {
-      primary: 'text-primary-400 hover:text-primary-500',
-      success: 'text-green-400 hover:text-green-500',
-      warning: 'text-yellow-400 hover:text-yellow-500',
-      danger: 'text-red-400 hover:text-red-500'
-    };
-
-    const isActive = this.isSelected(rating) || this.isHovered(rating);
-    const baseColor = colorClasses[this.color as keyof typeof colorClasses] || colorClasses.primary;
-    const activeColor = baseColor.split(' ')[0];
-    const hoverColor = !this.disabled && !this.readonly ? baseColor.split(' ')[1] : '';
+  getStarClasses(star: { value: number }): string {
+    const displayValue = this.hoveredValue ?? this.value;
+    const isPartialStar = displayValue % 1 !== 0 && Math.ceil(displayValue) === star.value;
+    const isFilled = star.value <= displayValue;
 
     return `
-      ${sizeClasses[this.size]}
-      ${isActive ? activeColor : 'text-gray-300'}
-      ${hoverColor}
-    `.trim();
+      fas
+      ${isPartialStar ? 'fa-star-half-alt' : 'fa-star'}
+      ${isFilled ? 'text-yellow-400' : 'text-gray-300'}
+      transition-colors duration-150
+    `;
   }
 
   getLabelClasses(): string {
-    const sizeClasses = {
-      sm: 'text-sm',
-      md: 'text-base',
-      lg: 'text-lg'
+    return `text-sm font-medium ${this.getTextColorClass()}`;
+  }
+
+  getCountClasses(): string {
+    const sizeMap = {
+      16: 'text-xs',
+      20: 'text-sm',
+      24: 'text-base',
+      28: 'text-lg'
     };
-    return `${sizeClasses[this.size]} text-gray-600`;
+
+    return sizeMap[this.size as keyof typeof sizeMap] || 'text-sm';
   }
 
-  getAriaLabel(rating: number): string {
-    return `Rate ${rating} out of ${this.max}`;
+  getTextColorClass(): string {
+    const value = this.hoveredValue ?? this.value;
+    if (value >= 4) return 'text-success-600';
+    if (value >= 2.5) return 'text-warning-600';
+    return value > 0 ? 'text-error-600' : 'text-gray-500';
   }
 
-  formatRating(value: number): string {
-    return this.allowHalf ? value.toFixed(1) : value.toString();
+  getLabel(): string {
+    const value = Math.round(this.hoveredValue ?? this.value);
+    return this.labels[value] || '';
+  }
+
+  onStarClick(value: number): void {
+    if (!this.readonly) {
+      const newValue = this.calculateValue(value);
+      if (newValue !== this.value) {
+        this.value = newValue;
+        this.ratingChange.emit(this.value);
+      }
+    }
+  }
+
+  onStarHover(value: number): void {
+    if (!this.readonly) {
+      this.hoveredValue = this.calculateValue(value);
+      this.ratingHover.emit(this.hoveredValue);
+    }
+  }
+
+  onStarLeave(): void {
+    this.hoveredValue = null;
+    if (!this.readonly) {
+      this.ratingHover.emit(this.value);
+    }
+  }
+
+  private calculateValue(value: number): number {
+    const rect = event?.target?.getBoundingClientRect();
+    if (rect && event instanceof MouseEvent) {
+      const starWidth = rect.width;
+      const offsetX = event.clientX - rect.left;
+      const percentage = offsetX / starWidth;
+
+      if (this.precision === 1) {
+        return value;
+      } else if (this.precision === 0.5) {
+        return percentage <= 0.5 ? value - 0.5 : value;
+      } else {
+        return value - 1 + percentage;
+      }
+    }
+    return value;
   }
 
   // Helper method to set value
   setValue(value: number): void {
-    if (value >= 0 && value <= this.max) {
-      this.value = this.allowHalf ? value : Math.round(value);
-      this.valueChange.emit(this.value);
-    }
+    this.value = Math.min(Math.max(value, 0), this.maxValue);
   }
 
-  // Helper method to reset rating
+  // Helper method to set max value
+  setMaxValue(maxValue: number): void {
+    this.maxValue = maxValue;
+    this.initializeStars();
+  }
+
+  // Helper method to set size
+  setSize(size: number): void {
+    this.size = size;
+  }
+
+  // Helper method to set colors
+  setColors(color: string, inactiveColor: string, hoverColor: string): void {
+    this.color = color;
+    this.inactiveColor = inactiveColor;
+    this.hoverColor = hoverColor;
+  }
+
+  // Helper method to set readonly
+  setReadonly(readonly: boolean): void {
+    this.readonly = readonly;
+  }
+
+  // Helper method to set precision
+  setPrecision(precision: number): void {
+    this.precision = precision;
+  }
+
+  // Helper method to set labels
+  setLabels(labels: Record<number, string>): void {
+    this.labels = labels;
+  }
+
+  // Helper method to set review count
+  setReviewCount(count: number): void {
+    this.reviewCount = count;
+  }
+
+  // Helper method to toggle label
+  toggleLabel(show: boolean): void {
+    this.showLabel = show;
+  }
+
+  // Helper method to toggle count
+  toggleCount(show: boolean): void {
+    this.showCount = show;
+  }
+
+  // Helper method to reset
   reset(): void {
-    this.setValue(0);
-    this.hoveredRating = 0;
+    this.value = 0;
+    this.hoveredValue = null;
+    this.ratingChange.emit(this.value);
   }
 
   // Helper method to get percentage
   getPercentage(): number {
-    return (this.value / this.max) * 100;
+    return (this.value / this.maxValue) * 100;
   }
 
-  // Helper method to check if rating is empty
-  isEmpty(): boolean {
-    return this.value === 0;
+  // Helper method to check if rated
+  isRated(): boolean {
+    return this.value > 0;
   }
 
-  // Helper method to check if rating is full
-  isFull(): boolean {
-    return this.value === this.max;
-  }
-
-  // Helper method to get filled symbols count
-  getFilledCount(): number {
-    return Math.floor(this.value);
-  }
-
-  // Helper method to check if has half symbol
-  hasHalf(): boolean {
-    return this.allowHalf && this.value % 1 !== 0;
-  }
-
-  // Helper method to get rating text
-  getRatingText(): string {
-    if (this.isEmpty()) return 'No rating';
-    if (this.isFull()) return 'Perfect';
-    return `${this.formatRating(this.value)} out of ${this.max}`;
-  }
-
-  // Helper method to get color based on value
-  getColorByValue(): string {
-    const percentage = this.getPercentage();
-    if (percentage >= 80) return 'success';
-    if (percentage >= 60) return 'primary';
-    if (percentage >= 40) return 'warning';
-    return 'danger';
+  // Helper method to get rounded value
+  getRoundedValue(): number {
+    return Math.round(this.value / this.precision) * this.precision;
   }
 }
