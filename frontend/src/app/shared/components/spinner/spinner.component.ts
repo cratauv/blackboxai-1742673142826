@@ -1,9 +1,8 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-type SpinnerType = 'border' | 'grow' | 'dots' | 'pulse' | 'wave';
-type SpinnerSize = 'sm' | 'md' | 'lg' | 'xl';
-type SpinnerColor = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info';
+type SpinnerSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+type SpinnerVariant = 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'light' | 'dark';
 
 @Component({
   selector: 'app-spinner',
@@ -11,196 +10,184 @@ type SpinnerColor = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' |
   imports: [CommonModule],
   template: `
     <div
-      class="inline-flex items-center justify-center"
-      [class.opacity-50]="dimmed"
       role="status"
+      [class]="getContainerClasses()"
     >
-      @switch (type) {
-        @case ('border') {
-          <div
-            class="animate-spin rounded-full border-solid"
-            [class]="getBorderSpinnerClasses()"
-          ></div>
-        }
-        @case ('grow') {
-          <div
-            class="animate-ping rounded-full"
-            [class]="getGrowSpinnerClasses()"
-          ></div>
-        }
-        @case ('dots') {
-          <div class="flex space-x-1">
-            @for (i of [1, 2, 3]; track i) {
-              <div
-                class="animate-bounce rounded-full"
-                [class]="getDotsSpinnerClasses()"
-                [style.animation-delay]="(i - 1) * 0.2 + 's'"
-              ></div>
-            }
-          </div>
-        }
-        @case ('pulse') {
-          <div class="relative">
-            <div
-              class="absolute animate-ping rounded-full opacity-75"
-              [class]="getPulseSpinnerClasses()"
-            ></div>
-            <div
-              class="relative rounded-full"
-              [class]="getPulseSpinnerClasses()"
-            ></div>
-          </div>
-        }
-        @case ('wave') {
-          <div class="flex items-center space-x-0.5">
-            @for (i of [1, 2, 3, 4, 5]; track i) {
-              <div
-                class="animate-wave"
-                [class]="getWaveSpinnerClasses()"
-                [style.animation-delay]="(i - 1) * 0.1 + 's'"
-              ></div>
-            }
-          </div>
-        }
+      <!-- Spinner -->
+      @if (type === 'border') {
+        <div
+          [class]="getBorderSpinnerClasses()"
+          [style.width]="size + 'px'"
+          [style.height]="size + 'px'"
+          [style.borderWidth]="thickness + 'px'"
+        ></div>
+      } @else {
+        <div
+          [class]="getGrowSpinnerClasses()"
+          [style.width]="size + 'px'"
+          [style.height]="size + 'px'"
+        >
+          @for (dot of [1, 2, 3, 4]; track dot) {
+            <div [class]="getDotClasses()"></div>
+          }
+        </div>
       }
 
       <!-- Label -->
       @if (label) {
-        <span
-          class="ml-2"
-          [class]="getLabelClasses()"
-        >
+        <span [class]="getLabelClasses()">
           {{ label }}
         </span>
       }
 
       <!-- Screen Reader Text -->
-      <span class="sr-only">Loading...</span>
+      <span class="sr-only">{{ srText }}</span>
     </div>
   `,
   styles: [`
-    @keyframes wave {
-      0%, 100% { transform: scaleY(1); }
-      50% { transform: scaleY(2); }
+    @keyframes spinner-border {
+      to {
+        transform: rotate(360deg);
+      }
     }
 
-    .animate-wave {
-      animation: wave 1s ease-in-out infinite;
-      transform-origin: center bottom;
+    @keyframes spinner-grow {
+      0% {
+        transform: scale(0);
+      }
+      50% {
+        opacity: 1;
+        transform: scale(1);
+      }
+      100% {
+        opacity: 0;
+        transform: scale(0);
+      }
+    }
+
+    .animate-spin {
+      animation: spinner-border 0.75s linear infinite;
+    }
+
+    .animate-grow {
+      animation: spinner-grow 0.75s linear infinite;
+    }
+
+    .animate-grow-delay-1 {
+      animation-delay: 0.1s;
+    }
+
+    .animate-grow-delay-2 {
+      animation-delay: 0.2s;
+    }
+
+    .animate-grow-delay-3 {
+      animation-delay: 0.3s;
     }
   `]
 })
 export class SpinnerComponent {
-  @Input() type: SpinnerType = 'border';
-  @Input() size: SpinnerSize = 'md';
-  @Input() color: SpinnerColor = 'primary';
+  @Input() type: 'border' | 'grow' = 'border';
+  @Input() variant: SpinnerVariant = 'primary';
+  @Input() size: number = 24;
+  @Input() thickness: number = 2;
   @Input() label = '';
-  @Input() dimmed = false;
+  @Input() labelPosition: 'left' | 'right' = 'right';
+  @Input() srText = 'Loading...';
+  @Input() centered = false;
 
-  private readonly sizeMap = {
-    sm: {
-      border: 'w-4 h-4 border-2',
-      grow: 'w-2 h-2',
-      dots: 'w-1.5 h-1.5',
-      pulse: 'w-3 h-3',
-      wave: 'w-1 h-4'
-    },
-    md: {
-      border: 'w-6 h-6 border-3',
-      grow: 'w-3 h-3',
-      dots: 'w-2 h-2',
-      pulse: 'w-4 h-4',
-      wave: 'w-1.5 h-6'
-    },
-    lg: {
-      border: 'w-8 h-8 border-4',
-      grow: 'w-4 h-4',
-      dots: 'w-2.5 h-2.5',
-      pulse: 'w-5 h-5',
-      wave: 'w-2 h-8'
-    },
-    xl: {
-      border: 'w-12 h-12 border-4',
-      grow: 'w-6 h-6',
-      dots: 'w-3 h-3',
-      pulse: 'w-6 h-6',
-      wave: 'w-2.5 h-12'
-    }
-  };
-
-  private readonly colorMap = {
-    primary: 'border-primary-500 text-primary-500 bg-primary-500',
-    secondary: 'border-gray-500 text-gray-500 bg-gray-500',
-    success: 'border-green-500 text-green-500 bg-green-500',
-    danger: 'border-red-500 text-red-500 bg-red-500',
-    warning: 'border-yellow-500 text-yellow-500 bg-yellow-500',
-    info: 'border-blue-500 text-blue-500 bg-blue-500'
-  };
+  getContainerClasses(): string {
+    return `
+      inline-flex items-center
+      ${this.centered ? 'justify-center' : ''}
+      ${this.labelPosition === 'right' ? 'space-x-2' : 'space-x-reverse space-x-2 flex-row-reverse'}
+    `;
+  }
 
   getBorderSpinnerClasses(): string {
+    const variantClasses = {
+      primary: 'border-primary-600 border-t-transparent',
+      secondary: 'border-gray-600 border-t-transparent',
+      success: 'border-success-600 border-t-transparent',
+      warning: 'border-warning-600 border-t-transparent',
+      error: 'border-error-600 border-t-transparent',
+      info: 'border-info-600 border-t-transparent',
+      light: 'border-gray-200 border-t-transparent',
+      dark: 'border-gray-800 border-t-transparent'
+    };
+
     return `
-      ${this.sizeMap[this.size].border}
-      border-t-transparent
-      ${this.colorMap[this.color].split(' ')[0]}
+      inline-block rounded-full
+      animate-spin
+      ${variantClasses[this.variant]}
     `;
   }
 
   getGrowSpinnerClasses(): string {
     return `
-      ${this.sizeMap[this.size].grow}
-      ${this.colorMap[this.color].split(' ')[2]}
+      relative inline-flex
+      ${this.centered ? 'justify-center' : ''}
     `;
   }
 
-  getDotsSpinnerClasses(): string {
-    return `
-      ${this.sizeMap[this.size].dots}
-      ${this.colorMap[this.color].split(' ')[2]}
-    `;
-  }
+  getDotClasses(): string {
+    const variantClasses = {
+      primary: 'bg-primary-600',
+      secondary: 'bg-gray-600',
+      success: 'bg-success-600',
+      warning: 'bg-warning-600',
+      error: 'bg-error-600',
+      info: 'bg-info-600',
+      light: 'bg-gray-200',
+      dark: 'bg-gray-800'
+    };
 
-  getPulseSpinnerClasses(): string {
     return `
-      ${this.sizeMap[this.size].pulse}
-      ${this.colorMap[this.color].split(' ')[2]}
-    `;
-  }
-
-  getWaveSpinnerClasses(): string {
-    return `
-      ${this.sizeMap[this.size].wave}
-      ${this.colorMap[this.color].split(' ')[2]}
+      absolute w-1/4 h-1/4 rounded-full
+      animate-grow opacity-0
+      ${variantClasses[this.variant]}
     `;
   }
 
   getLabelClasses(): string {
-    const sizes = {
+    const sizeClasses = {
+      xs: 'text-xs',
       sm: 'text-sm',
       md: 'text-base',
       lg: 'text-lg',
       xl: 'text-xl'
     };
 
-    return `
-      ${sizes[this.size]}
-      ${this.colorMap[this.color].split(' ')[1]}
-      font-medium
-    `;
+    const size = this.getSizeClass();
+    return `${sizeClasses[size]} font-medium text-gray-900`;
+  }
+
+  private getSizeClass(): SpinnerSize {
+    if (this.size <= 16) return 'xs';
+    if (this.size <= 20) return 'sm';
+    if (this.size <= 24) return 'md';
+    if (this.size <= 32) return 'lg';
+    return 'xl';
   }
 
   // Helper method to set type
-  setType(type: SpinnerType): void {
+  setType(type: 'border' | 'grow'): void {
     this.type = type;
   }
 
+  // Helper method to set variant
+  setVariant(variant: SpinnerVariant): void {
+    this.variant = variant;
+  }
+
   // Helper method to set size
-  setSize(size: SpinnerSize): void {
+  setSize(size: number): void {
     this.size = size;
   }
 
-  // Helper method to set color
-  setColor(color: SpinnerColor): void {
-    this.color = color;
+  // Helper method to set thickness
+  setThickness(thickness: number): void {
+    this.thickness = thickness;
   }
 
   // Helper method to set label
@@ -208,50 +195,43 @@ export class SpinnerComponent {
     this.label = label;
   }
 
-  // Helper method to toggle dimmed state
-  toggleDimmed(): void {
-    this.dimmed = !this.dimmed;
+  // Helper method to set label position
+  setLabelPosition(position: 'left' | 'right'): void {
+    this.labelPosition = position;
   }
 
-  // Helper method to get spinner dimensions
-  getDimensions(): { width: number; height: number } {
-    const sizeClasses = this.sizeMap[this.size][this.type];
-    const width = parseInt(sizeClasses.match(/w-(\d+)/)?.[1] || '0');
-    const height = parseInt(sizeClasses.match(/h-(\d+)/)?.[1] || '0');
-    return { width, height };
+  // Helper method to set screen reader text
+  setSrText(text: string): void {
+    this.srText = text;
+  }
+
+  // Helper method to toggle centered
+  toggleCentered(centered: boolean): void {
+    this.centered = centered;
+  }
+
+  // Helper method to get size in pixels
+  getSizeInPixels(): number {
+    return this.size;
+  }
+
+  // Helper method to get thickness in pixels
+  getThicknessInPixels(): number {
+    return this.thickness;
+  }
+
+  // Helper method to check if has label
+  hasLabel(): boolean {
+    return !!this.label;
   }
 
   // Helper method to get animation duration
-  getAnimationDuration(): number {
-    switch (this.type) {
-      case 'border':
-        return 750;
-      case 'grow':
-        return 1000;
-      case 'dots':
-        return 600;
-      case 'pulse':
-        return 1000;
-      case 'wave':
-        return 1000;
-      default:
-        return 0;
-    }
+  getAnimationDuration(): string {
+    return '0.75s';
   }
 
-  // Helper method to check if spinner is animated
-  isAnimated(): boolean {
-    return ['border', 'grow', 'dots', 'pulse', 'wave'].includes(this.type);
-  }
-
-  // Helper method to get accessibility label
-  getAriaLabel(): string {
-    return this.label || 'Loading...';
-  }
-
-  // Helper method to get color scheme
-  getColorScheme(): { border: string; text: string; background: string } {
-    const [border, text, background] = this.colorMap[this.color].split(' ');
-    return { border, text, background };
+  // Helper method to get animation timing
+  getAnimationTiming(): string {
+    return 'linear';
   }
 }
