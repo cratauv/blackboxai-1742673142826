@@ -2,94 +2,101 @@ import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { animate, style, transition, trigger } from '@angular/animations';
 
-type SnackbarType = 'info' | 'success' | 'warning' | 'error';
+type SnackbarType = 'default' | 'success' | 'error' | 'warning' | 'info';
 type SnackbarPosition = 'top' | 'bottom';
-type SnackbarAlignment = 'left' | 'center' | 'right';
 
 @Component({
   selector: 'app-snackbar',
   standalone: true,
   imports: [CommonModule],
   template: `
-    @if (isVisible) {
+    <div
+      class="fixed z-50 pointer-events-none"
+      [class]="getContainerClasses()"
+    >
       <div
-        class="fixed z-50 pointer-events-none"
-        [class]="getPositionClasses()"
+        class="flex max-w-sm w-full mx-auto pointer-events-auto overflow-hidden"
+        [class]="getSnackbarClasses()"
+        [@slideInOut]="isVisible"
+        role="alert"
+        aria-live="assertive"
       >
-        <div
-          class="flex max-w-sm w-full mx-auto pointer-events-auto overflow-hidden"
-          [class]="getContainerClasses()"
-          [@snackbarAnimation]
-          role="alert"
-          aria-live="assertive"
-        >
-          <div class="flex-1 p-4">
-            <div class="flex items-start">
-              <!-- Icon -->
-              @if (showIcon) {
-                <div class="flex-shrink-0">
-                  <i [class]="getIconClasses()"></i>
-                </div>
-              }
-
-              <!-- Content -->
-              <div [class]="showIcon ? 'ml-3 w-0 flex-1' : 'w-full'">
-                <!-- Title -->
-                @if (title) {
-                  <p 
-                    class="text-sm font-medium"
-                    [class]="getTitleClasses()"
-                  >
-                    {{ title }}
-                  </p>
-                }
-
-                <!-- Message -->
-                <p 
-                  [class.mt-1]="title"
-                  class="text-sm"
-                  [class]="getMessageClasses()"
-                >
-                  {{ message }}
-                </p>
-
-                <!-- Action Button -->
-                @if (actionLabel) {
-                  <div class="mt-3">
-                    <button
-                      type="button"
-                      class="text-sm font-medium rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2"
-                      [class]="getActionButtonClasses()"
-                      (click)="onAction()"
-                    >
-                      {{ actionLabel }}
-                    </button>
-                  </div>
+        <div class="flex-1 p-4">
+          <div class="flex items-start">
+            <!-- Icon -->
+            @if (showIcon) {
+              <div class="flex-shrink-0">
+                @switch (type) {
+                  @case ('success') {
+                    <i class="fas fa-check-circle text-green-400 text-lg"></i>
+                  }
+                  @case ('error') {
+                    <i class="fas fa-times-circle text-red-400 text-lg"></i>
+                  }
+                  @case ('warning') {
+                    <i class="fas fa-exclamation-circle text-yellow-400 text-lg"></i>
+                  }
+                  @case ('info') {
+                    <i class="fas fa-info-circle text-blue-400 text-lg"></i>
+                  }
                 }
               </div>
+            }
 
-              <!-- Close Button -->
-              @if (dismissible) {
-                <div class="ml-4 flex-shrink-0 flex">
-                  <button
-                    type="button"
-                    class="rounded-md inline-flex focus:outline-none focus:ring-2 focus:ring-offset-2"
-                    [class]="getCloseButtonClasses()"
-                    (click)="dismiss()"
-                  >
-                    <span class="sr-only">Close</span>
-                    <i class="fas fa-times"></i>
-                  </button>
-                </div>
+            <!-- Content -->
+            <div [class]="showIcon ? 'ml-3' : ''">
+              <p class="text-sm font-medium text-gray-900">
+                {{ message }}
+              </p>
+              @if (description) {
+                <p class="mt-1 text-sm text-gray-500">
+                  {{ description }}
+                </p>
               }
             </div>
           </div>
         </div>
+
+        <!-- Action Button -->
+        @if (action) {
+          <div class="flex border-l border-gray-200">
+            <button
+              type="button"
+              class="w-full border border-transparent rounded-none p-4 flex items-center justify-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500"
+              [class]="getActionButtonClasses()"
+              (click)="onAction()"
+            >
+              {{ action }}
+            </button>
+          </div>
+        }
+
+        <!-- Close Button -->
+        @if (dismissible) {
+          <div class="flex border-l border-gray-200">
+            <button
+              type="button"
+              class="w-full border border-transparent rounded-none p-4 flex items-center justify-center text-sm font-medium text-gray-600 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              (click)="dismiss()"
+            >
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+        }
+
+        <!-- Progress Bar -->
+        @if (duration > 0) {
+          <div
+            class="absolute bottom-0 left-0 h-1 bg-primary-500"
+            [style.width.%]="progressWidth"
+            [style.transition]="'width ' + duration + 'ms linear'"
+          ></div>
+        }
       </div>
-    }
+    </div>
   `,
   animations: [
-    trigger('snackbarAnimation', [
+    trigger('slideInOut', [
       transition(':enter', [
         style({ transform: 'translateY(100%)', opacity: 0 }),
         animate('150ms ease-out', style({ transform: 'translateY(0)', opacity: 1 }))
@@ -101,174 +108,190 @@ type SnackbarAlignment = 'left' | 'center' | 'right';
   ]
 })
 export class SnackbarComponent {
-  @Input() type: SnackbarType = 'info';
-  @Input() title = '';
-  @Input() message = '';
-  @Input() position: SnackbarPosition = 'bottom';
-  @Input() alignment: SnackbarAlignment = 'center';
-  @Input() duration = 5000;
-  @Input() showIcon = true;
-  @Input() dismissible = true;
-  @Input() actionLabel = '';
   @Input() isVisible = false;
+  @Input() message = '';
+  @Input() description = '';
+  @Input() type: SnackbarType = 'default';
+  @Input() position: SnackbarPosition = 'bottom';
+  @Input() duration = 5000;
+  @Input() action = '';
+  @Input() dismissible = true;
+  @Input() showIcon = true;
 
   @Output() dismissed = new EventEmitter<void>();
-  @Output() action = new EventEmitter<void>();
+  @Output() actionClicked = new EventEmitter<void>();
 
-  private timeoutId?: number;
+  progressWidth = 100;
+  private progressTimer?: number;
+  private dismissTimer?: number;
 
-  ngOnInit(): void {
-    if (this.duration > 0) {
-      this.startDismissTimer();
+  ngOnChanges(): void {
+    if (this.isVisible) {
+      this.show();
+    } else {
+      this.hide();
     }
   }
 
   ngOnDestroy(): void {
-    this.clearDismissTimer();
+    this.clearTimers();
   }
 
-  getPositionClasses(): string {
+  private show(): void {
+    this.clearTimers();
+    this.progressWidth = 100;
+
+    if (this.duration > 0) {
+      // Start progress bar animation
+      requestAnimationFrame(() => {
+        this.progressWidth = 0;
+      });
+
+      // Set dismiss timer
+      this.dismissTimer = window.setTimeout(() => {
+        this.dismiss();
+      }, this.duration);
+    }
+  }
+
+  private hide(): void {
+    this.clearTimers();
+  }
+
+  private clearTimers(): void {
+    if (this.progressTimer) {
+      clearTimeout(this.progressTimer);
+    }
+    if (this.dismissTimer) {
+      clearTimeout(this.dismissTimer);
+    }
+  }
+
+  getContainerClasses(): string {
     const positions = {
       top: 'top-0 pt-4',
       bottom: 'bottom-0 pb-4'
     };
 
-    const alignments = {
-      left: 'left-0 pl-4',
-      center: 'left-1/2 transform -translate-x-1/2',
-      right: 'right-0 pr-4'
-    };
-
-    return `${positions[this.position]} ${alignments[this.alignment]}`;
+    return `
+      left-0 right-0
+      ${positions[this.position]}
+    `;
   }
 
-  getContainerClasses(): string {
-    const baseClasses = 'rounded-lg shadow-lg';
-    
-    const types = {
-      info: 'bg-blue-50 border border-blue-200',
-      success: 'bg-green-50 border border-green-200',
-      warning: 'bg-yellow-50 border border-yellow-200',
-      error: 'bg-red-50 border border-red-200'
+  getSnackbarClasses(): string {
+    const typeClasses = {
+      default: 'bg-white',
+      success: 'bg-green-50',
+      error: 'bg-red-50',
+      warning: 'bg-yellow-50',
+      info: 'bg-blue-50'
     };
 
-    return `${baseClasses} ${types[this.type]}`;
-  }
-
-  getIconClasses(): string {
-    const baseClasses = 'h-5 w-5';
-    
-    const icons = {
-      info: 'fas fa-info-circle text-blue-400',
-      success: 'fas fa-check-circle text-green-400',
-      warning: 'fas fa-exclamation-triangle text-yellow-400',
-      error: 'fas fa-exclamation-circle text-red-400'
-    };
-
-    return `${baseClasses} ${icons[this.type]}`;
-  }
-
-  getTitleClasses(): string {
-    const colors = {
-      info: 'text-blue-800',
-      success: 'text-green-800',
-      warning: 'text-yellow-800',
-      error: 'text-red-800'
-    };
-    return colors[this.type];
-  }
-
-  getMessageClasses(): string {
-    const colors = {
-      info: 'text-blue-700',
-      success: 'text-green-700',
-      warning: 'text-yellow-700',
-      error: 'text-red-700'
-    };
-    return colors[this.type];
+    return `
+      ${typeClasses[this.type]}
+      rounded-lg
+      shadow-lg
+      relative
+    `;
   }
 
   getActionButtonClasses(): string {
-    const colors = {
-      info: 'text-blue-600 hover:text-blue-500 focus:ring-blue-500',
-      success: 'text-green-600 hover:text-green-500 focus:ring-green-500',
-      warning: 'text-yellow-600 hover:text-yellow-500 focus:ring-yellow-500',
-      error: 'text-red-600 hover:text-red-500 focus:ring-red-500'
+    const typeClasses = {
+      default: 'text-primary-600 hover:text-primary-500',
+      success: 'text-green-600 hover:text-green-500',
+      error: 'text-red-600 hover:text-red-500',
+      warning: 'text-yellow-600 hover:text-yellow-500',
+      info: 'text-blue-600 hover:text-blue-500'
     };
-    return colors[this.type];
-  }
 
-  getCloseButtonClasses(): string {
-    const colors = {
-      info: 'text-blue-400 hover:text-blue-500',
-      success: 'text-green-400 hover:text-green-500',
-      warning: 'text-yellow-400 hover:text-yellow-500',
-      error: 'text-red-400 hover:text-red-500'
-    };
-    return colors[this.type];
+    return typeClasses[this.type];
   }
 
   dismiss(): void {
-    this.clearDismissTimer();
-    this.isVisible = false;
+    this.clearTimers();
     this.dismissed.emit();
   }
 
   onAction(): void {
-    this.clearDismissTimer();
-    this.action.emit();
-  }
-
-  private startDismissTimer(): void {
-    this.timeoutId = window.setTimeout(() => {
-      this.dismiss();
-    }, this.duration);
-  }
-
-  private clearDismissTimer(): void {
-    if (this.timeoutId) {
-      clearTimeout(this.timeoutId);
-      this.timeoutId = undefined;
-    }
+    this.actionClicked.emit();
+    this.dismiss();
   }
 
   // Helper method to show snackbar
   show(): void {
     this.isVisible = true;
+  }
+
+  // Helper method to set message
+  setMessage(message: string, description?: string): void {
+    this.message = message;
+    this.description = description || '';
+  }
+
+  // Helper method to set type
+  setType(type: SnackbarType): void {
+    this.type = type;
+  }
+
+  // Helper method to set position
+  setPosition(position: SnackbarPosition): void {
+    this.position = position;
+  }
+
+  // Helper method to set duration
+  setDuration(duration: number): void {
+    this.duration = duration;
+  }
+
+  // Helper method to set action
+  setAction(action: string): void {
+    this.action = action;
+  }
+
+  // Helper method to toggle dismissible
+  toggleDismissible(dismissible: boolean): void {
+    this.dismissible = dismissible;
+  }
+
+  // Helper method to toggle icon
+  toggleIcon(showIcon: boolean): void {
+    this.showIcon = showIcon;
+  }
+
+  // Helper method to check if visible
+  isShown(): boolean {
+    return this.isVisible;
+  }
+
+  // Helper method to get remaining time
+  getRemainingTime(): number {
+    if (!this.dismissTimer) return 0;
+    return Math.max(0, this.duration - (Date.now() - this.dismissTimer));
+  }
+
+  // Helper method to pause timer
+  pause(): void {
+    this.clearTimers();
+  }
+
+  // Helper method to resume timer
+  resume(): void {
     if (this.duration > 0) {
-      this.startDismissTimer();
+      const remaining = this.getRemainingTime();
+      if (remaining > 0) {
+        this.duration = remaining;
+        this.show();
+      }
     }
   }
 
-  // Helper method to get animation duration
-  getAnimationDuration(): number {
-    return 150; // milliseconds
-  }
-
-  // Helper method to get z-index
-  getZIndex(): number {
-    return 50;
-  }
-
-  // Helper method to get background color
-  getBgColor(): string {
-    const colors = {
-      info: '#EFF6FF',
-      success: '#ECFDF5',
-      warning: '#FFFBEB',
-      error: '#FEF2F2'
+  // Helper method to get color scheme
+  getColorScheme(): { background: string; text: string; action: string } {
+    return {
+      background: this.getSnackbarClasses().match(/bg-\w+-\d+/)?.[0] || '',
+      text: 'text-gray-900',
+      action: this.getActionButtonClasses()
     };
-    return colors[this.type];
-  }
-
-  // Helper method to get border color
-  getBorderColor(): string {
-    const colors = {
-      info: '#BFDBFE',
-      success: '#A7F3D0',
-      warning: '#FDE68A',
-      error: '#FECACA'
-    };
-    return colors[this.type];
   }
 }
