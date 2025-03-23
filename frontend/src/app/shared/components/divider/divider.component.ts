@@ -1,193 +1,222 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-type DividerVariant = 'solid' | 'dashed' | 'dotted';
-type DividerAlignment = 'start' | 'center' | 'end';
+type DividerType = 'solid' | 'dashed' | 'dotted';
 type DividerOrientation = 'horizontal' | 'vertical';
-type DividerThickness = 'thin' | 'medium' | 'thick';
+type DividerAlignment = 'start' | 'center' | 'end';
 
 @Component({
   selector: 'app-divider',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div 
-      class="flex"
-      [class.items-center]="orientation === 'horizontal'"
-      [class.h-full]="orientation === 'vertical'"
+    <div
+      class="flex items-center"
+      [class]="getContainerClasses()"
+      role="separator"
+      [attr.aria-orientation]="orientation"
     >
-      <!-- Left/Top Content -->
-      @if (showContent && ((orientation === 'horizontal' && alignment !== 'end') || 
-          (orientation === 'vertical' && alignment !== 'end'))) {
-        <div [class]="getContentClasses('before')">
-          <ng-content select="[dividerContent]"></ng-content>
+      <!-- Line Before -->
+      @if (label && alignment !== 'start') {
+        <div
+          class="flex-grow"
+          [class]="getLineClasses()"
+        ></div>
+      }
+
+      <!-- Label -->
+      @if (label) {
+        <div
+          class="flex-shrink-0 font-medium text-gray-500"
+          [class]="getLabelClasses()"
+        >
+          @if (icon) {
+            <i [class]="icon" class="mr-2"></i>
+          }
+          {{ label }}
         </div>
       }
 
-      <!-- Divider Line -->
-      <div
-        role="separator"
-        [attr.aria-orientation]="orientation"
-        [class]="getDividerClasses()"
-      >
-        <!-- Center Content -->
-        @if (showContent && alignment === 'center') {
-          <div [class]="getContentClasses('center')">
-            <ng-content select="[dividerContent]"></ng-content>
-          </div>
-        }
-      </div>
+      <!-- Line After -->
+      @if (label && alignment !== 'end') {
+        <div
+          class="flex-grow"
+          [class]="getLineClasses()"
+        ></div>
+      }
 
-      <!-- Right/Bottom Content -->
-      @if (showContent && ((orientation === 'horizontal' && alignment !== 'start') || 
-          (orientation === 'vertical' && alignment !== 'start'))) {
-        <div [class]="getContentClasses('after')">
-          <ng-content select="[dividerContent]"></ng-content>
-        </div>
+      <!-- Simple Line (No Label) -->
+      @if (!label) {
+        <div
+          class="flex-grow"
+          [class]="getLineClasses()"
+        ></div>
       }
     </div>
   `
 })
 export class DividerComponent {
-  @Input() variant: DividerVariant = 'solid';
+  @Input() type: DividerType = 'solid';
   @Input() orientation: DividerOrientation = 'horizontal';
   @Input() alignment: DividerAlignment = 'center';
-  @Input() thickness: DividerThickness = 'thin';
-  @Input() color = 'gray-200';
-  @Input() spacing = 4;
-  @Input() showContent = false;
+  @Input() label = '';
+  @Input() icon = '';
+  @Input() color = 'gray';
+  @Input() spacing = '1rem';
+  @Input() thickness = '1px';
 
-  getDividerClasses(): string {
-    const baseClasses = [
-      this.getBorderStyle(),
-      this.getThicknessClasses(),
-      this.getColorClasses(),
-      'flex-shrink-0'
-    ];
-
-    if (this.orientation === 'horizontal') {
-      baseClasses.push('w-full');
-    } else {
-      baseClasses.push('h-full');
+  getContainerClasses(): string {
+    if (this.orientation === 'vertical') {
+      return `
+        h-full flex-col
+        ${this.label ? 'space-y-4' : ''}
+      `.trim();
     }
 
-    if (this.showContent && this.alignment === 'center') {
-      baseClasses.push('flex items-center justify-center');
-    }
-
-    return baseClasses.join(' ');
+    return '';
   }
 
-  getContentClasses(position: 'before' | 'center' | 'after'): string {
-    const baseClasses = ['flex-shrink-0'];
-
-    if (this.orientation === 'horizontal') {
-      switch (position) {
-        case 'before':
-          baseClasses.push(`mr-${this.spacing}`);
-          break;
-        case 'center':
-          baseClasses.push(`mx-${this.spacing}`);
-          break;
-        case 'after':
-          baseClasses.push(`ml-${this.spacing}`);
-          break;
-      }
-    } else {
-      switch (position) {
-        case 'before':
-          baseClasses.push(`mb-${this.spacing}`);
-          break;
-        case 'center':
-          baseClasses.push(`my-${this.spacing}`);
-          break;
-        case 'after':
-          baseClasses.push(`mt-${this.spacing}`);
-          break;
-      }
-    }
-
-    return baseClasses.join(' ');
-  }
-
-  private getBorderStyle(): string {
-    const styles = {
-      solid: this.orientation === 'horizontal' ? 'border-t' : 'border-l',
-      dashed: this.orientation === 'horizontal' ? 'border-t border-dashed' : 'border-l border-dashed',
-      dotted: this.orientation === 'horizontal' ? 'border-t border-dotted' : 'border-l border-dotted'
+  getLineClasses(): string {
+    const borderStyles = {
+      solid: 'border-solid',
+      dashed: 'border-dashed',
+      dotted: 'border-dotted'
     };
-    return styles[this.variant];
+
+    const orientationClasses = this.orientation === 'vertical'
+      ? 'border-l h-full'
+      : 'border-t w-full';
+
+    return `
+      ${orientationClasses}
+      ${borderStyles[this.type]}
+      border-${this.color}-200
+      ${this.label ? 'opacity-75' : ''}
+    `.trim();
   }
 
-  private getThicknessClasses(): string {
-    const thicknesses = {
-      thin: '',
-      medium: this.orientation === 'horizontal' ? 'border-t-2' : 'border-l-2',
-      thick: this.orientation === 'horizontal' ? 'border-t-4' : 'border-l-4'
+  getLabelClasses(): string {
+    if (this.orientation === 'vertical') {
+      return `
+        transform -rotate-90
+        whitespace-nowrap
+        px-4
+      `.trim();
+    }
+
+    return `
+      px-4
+      ${this.alignment === 'start' ? 'pl-0' : ''}
+      ${this.alignment === 'end' ? 'pr-0' : ''}
+    `.trim();
+  }
+
+  // Helper method to set type
+  setType(type: DividerType): void {
+    this.type = type;
+  }
+
+  // Helper method to set orientation
+  setOrientation(orientation: DividerOrientation): void {
+    this.orientation = orientation;
+  }
+
+  // Helper method to set alignment
+  setAlignment(alignment: DividerAlignment): void {
+    this.alignment = alignment;
+  }
+
+  // Helper method to set label
+  setLabel(label: string): void {
+    this.label = label;
+  }
+
+  // Helper method to set icon
+  setIcon(icon: string): void {
+    this.icon = icon;
+  }
+
+  // Helper method to set color
+  setColor(color: string): void {
+    this.color = color;
+  }
+
+  // Helper method to set spacing
+  setSpacing(spacing: string): void {
+    this.spacing = spacing;
+  }
+
+  // Helper method to set thickness
+  setThickness(thickness: string): void {
+    this.thickness = thickness;
+  }
+
+  // Helper method to check if has label
+  hasLabel(): boolean {
+    return !!this.label;
+  }
+
+  // Helper method to check if has icon
+  hasIcon(): boolean {
+    return !!this.icon;
+  }
+
+  // Helper method to get border style
+  getBorderStyle(): string {
+    return `
+      border-${this.type}
+      border-${this.color}-200
+      border-${this.orientation === 'vertical' ? 'l' : 't'}
+      ${this.thickness}
+    `.trim();
+  }
+
+  // Helper method to get label position classes
+  getLabelPositionClasses(): string {
+    if (this.orientation === 'vertical') {
+      return 'transform -rotate-90 whitespace-nowrap px-4';
+    }
+
+    const alignmentClasses = {
+      start: 'pl-0',
+      center: 'px-4',
+      end: 'pr-0'
     };
-    return thicknesses[this.thickness];
+
+    return alignmentClasses[this.alignment];
   }
 
-  private getColorClasses(): string {
-    return `border-${this.color}`;
-  }
-
-  // Helper method to get margin classes
-  getMarginClasses(): string {
-    if (this.orientation === 'horizontal') {
-      return `my-${this.spacing}`;
-    }
-    return `mx-${this.spacing}`;
-  }
-
-  // Helper method to get padding classes
-  getPaddingClasses(): string {
-    if (this.orientation === 'horizontal') {
-      return `py-${this.spacing}`;
-    }
-    return `px-${this.spacing}`;
-  }
-
-  // Helper method to get flex direction
-  getFlexDirection(): string {
-    if (this.orientation === 'horizontal') {
-      return 'flex-row';
-    }
-    return 'flex-col';
-  }
-
-  // Helper method to get alignment classes
-  getAlignmentClasses(): string {
-    const alignments = {
-      start: this.orientation === 'horizontal' ? 'justify-start' : 'items-start',
-      center: this.orientation === 'horizontal' ? 'justify-center' : 'items-center',
-      end: this.orientation === 'horizontal' ? 'justify-end' : 'items-end'
+  // Helper method to get container style
+  getContainerStyle(): { [key: string]: string } {
+    return {
+      gap: this.spacing,
+      ...(this.orientation === 'vertical' ? { height: '100%' } : {})
     };
-    return alignments[this.alignment];
   }
 
-  // Helper method to check if divider is horizontal
-  isHorizontal(): boolean {
-    return this.orientation === 'horizontal';
+  // Helper method to get line style
+  getLineStyle(): { [key: string]: string } {
+    return {
+      borderWidth: this.thickness,
+      ...(this.orientation === 'vertical' ? { height: '100%' } : { width: '100%' })
+    };
   }
 
-  // Helper method to check if divider is vertical
+  // Helper method to get accessibility attributes
+  getAriaAttributes(): { [key: string]: string } {
+    return {
+      role: 'separator',
+      'aria-orientation': this.orientation
+    };
+  }
+
+  // Helper method to check if is vertical
   isVertical(): boolean {
     return this.orientation === 'vertical';
   }
 
-  // Helper method to get ARIA label
-  getAriaLabel(): string {
-    return `${this.orientation} divider`;
-  }
-
-  // Helper method to get container height for vertical divider
-  getContainerHeight(): string {
-    return this.isVertical() ? 'h-full' : '';
-  }
-
-  // Helper method to get container width for horizontal divider
-  getContainerWidth(): string {
-    return this.isHorizontal() ? 'w-full' : '';
+  // Helper method to check if is horizontal
+  isHorizontal(): boolean {
+    return this.orientation === 'horizontal';
   }
 }
