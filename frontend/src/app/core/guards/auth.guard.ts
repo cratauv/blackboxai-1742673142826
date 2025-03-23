@@ -1,70 +1,83 @@
-import { inject } from '@angular/core';
-import { Router, type CanActivateFn } from '@angular/router';
+import { Injectable } from '@angular/core';
+import { Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
-import { NotificationService } from '../services/notification.service';
 
-export const authGuard: CanActivateFn = (route, state) => {
-  const router = inject(Router);
-  const authService = inject(AuthService);
-  const notificationService = inject(NotificationService);
+@Injectable({
+  providedIn: 'root'
+})
+export class AuthGuard {
+  constructor(
+    private authService: AuthService,
+    private router: Router
+  ) {}
 
-  if (authService.isLoggedIn) {
-    return true;
-  }
+  canActivate(): boolean {
+    if (this.authService.isAuthenticated) {
+      // Check if token is expired
+      if (this.authService.isTokenExpired()) {
+        this.authService.logout();
+        this.router.navigate(['/auth/login'], {
+          queryParams: { returnUrl: this.router.url }
+        });
+        return false;
+      }
+      return true;
+    }
 
-  // Store the attempted URL for redirecting
-  const currentUrl = state.url;
-  
-  // Show notification
-  notificationService.warning('Please log in to access this page');
-  
-  // Navigate to login page with return url
-  router.navigate(['/auth/login'], {
-    queryParams: { returnUrl: currentUrl }
-  });
-
-  return false;
-};
-
-export const adminGuard: CanActivateFn = (route, state) => {
-  const router = inject(Router);
-  const authService = inject(AuthService);
-  const notificationService = inject(NotificationService);
-
-  if (authService.isLoggedIn && authService.isAdmin) {
-    return true;
-  }
-
-  if (!authService.isLoggedIn) {
-    // Store the attempted URL for redirecting
-    const currentUrl = state.url;
-    
-    // Show notification
-    notificationService.warning('Please log in to access this page');
-    
-    // Navigate to login page with return url
-    router.navigate(['/auth/login'], {
-      queryParams: { returnUrl: currentUrl }
+    // Not logged in, redirect to login page
+    this.router.navigate(['/auth/login'], {
+      queryParams: { returnUrl: this.router.url }
     });
-  } else {
-    // User is logged in but not an admin
-    notificationService.error('Access denied. Admin privileges required.');
-    router.navigate(['/']);
+    return false;
   }
 
-  return false;
-};
-
-// Guard to prevent authenticated users from accessing auth pages (login/register)
-export const noAuthGuard: CanActivateFn = (route, state) => {
-  const router = inject(Router);
-  const authService = inject(AuthService);
-
-  if (!authService.isLoggedIn) {
-    return true;
+  canActivateChild(): boolean {
+    return this.canActivate();
   }
 
-  // If user is already logged in, redirect to home page
-  router.navigate(['/']);
-  return false;
-};
+  // Additional guard methods for specific roles
+  canActivateAdmin(): boolean {
+    return this.canActivate() && this.authService.hasRole('admin');
+  }
+
+  canActivateVerified(): boolean {
+    return this.canActivate() && this.authService.isEmailVerified();
+  }
+
+  // Helper method to check multiple roles
+  hasAnyRole(roles: string[]): boolean {
+    return this.canActivate() && roles.some(role => this.authService.hasRole(role));
+  }
+
+  // Helper method to redirect based on role
+  redirectBasedOnRole(): void {
+    const user = this.authService.currentUser;
+    if (!user) return;
+
+    switch (user.role) {
+      case 'admin':
+        this.router.navigate(['/admin/dashboard']);
+        break;
+      case 'seller':
+        this.router.navigate(['/seller/dashboard']);
+        break;
+      default:
+        this.router.navigate(['/dashboard']);
+    }
+  }
+
+  // Helper method to handle unauthorized access
+  handleUnauthorized(): void {
+    this.router.navigate(['/unauthorized']);
+  }
+
+  // Helper method to check if route requires verification
+  requiresVerification(route: any): boolean {
+    return route.data?.requiresVerification ?? false;
+  }
+
+  // Helper method to handle unverified users
+  handleUnverified(): void {
+    this.router.navigate(['/auth/verify-email']);
+  }
+}
