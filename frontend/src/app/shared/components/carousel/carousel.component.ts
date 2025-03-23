@@ -1,10 +1,11 @@
-import { Component, Input, Output, EventEmitter, ElementRef, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { animate, style, transition, trigger } from '@angular/animations';
 
 interface CarouselSlide {
   id: string | number;
-  image?: string;
+  type: 'image' | 'video' | 'content';
+  src?: string;
+  alt?: string;
   title?: string;
   description?: string;
   content?: any;
@@ -15,33 +16,44 @@ interface CarouselSlide {
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="relative group">
+    <div class="relative w-full overflow-hidden rounded-lg">
       <!-- Slides Container -->
       <div
-        #slidesContainer
-        class="relative overflow-hidden rounded-lg"
-        [class.aspect-video]="maintainAspectRatio"
+        class="relative h-full"
+        [style.paddingBottom]="aspectRatio"
       >
-        <!-- Slides -->
-        @for (slide of slides; track slide.id) {
+        @for (slide of slides; track slide.id; let i = $index) {
           <div
-            class="absolute inset-0 w-full"
-            [class.hidden]="currentIndex !== slides.indexOf(slide)"
-            [@slideAnimation]="getAnimationState(slides.indexOf(slide))"
+            class="absolute inset-0 w-full h-full transition-opacity duration-500"
+            [class.opacity-100]="i === currentIndex"
+            [class.opacity-0]="i !== currentIndex"
           >
-            @if (slide.image) {
-              <img
-                [src]="slide.image"
-                [alt]="slide.title"
-                class="w-full h-full object-cover"
-                [class.object-contain]="imageContain"
-              />
-            }
-
-            @if (slide.content) {
-              <ng-container
-                [ngTemplateOutlet]="slide.content"
-              ></ng-container>
+            @switch (slide.type) {
+              @case ('image') {
+                <img
+                  [src]="slide.src"
+                  [alt]="slide.alt"
+                  class="w-full h-full object-cover"
+                  [class.cursor-pointer]="clickable"
+                  (click)="onSlideClick(slide)"
+                >
+              }
+              @case ('video') {
+                <video
+                  [src]="slide.src"
+                  class="w-full h-full object-cover"
+                  [controls]="showControls"
+                  [autoplay]="autoplay"
+                  [loop]="loop"
+                  [muted]="muted"
+                >
+                </video>
+              }
+              @default {
+                <div class="w-full h-full flex items-center justify-center">
+                  <ng-container [ngTemplateOutlet]="slide.content"></ng-container>
+                </div>
+              }
             }
 
             <!-- Caption -->
@@ -51,7 +63,7 @@ interface CarouselSlide {
                   <h3 class="text-lg font-semibold">{{ slide.title }}</h3>
                 }
                 @if (slide.description) {
-                  <p class="mt-1 text-sm">{{ slide.description }}</p>
+                  <p class="text-sm">{{ slide.description }}</p>
                 }
               </div>
             }
@@ -62,14 +74,14 @@ interface CarouselSlide {
         @if (showArrows && slides.length > 1) {
           <button
             type="button"
-            class="absolute top-1/2 left-4 -translate-y-1/2 p-2 rounded-full bg-black bg-opacity-50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            class="absolute top-1/2 left-4 -translate-y-1/2 p-2 rounded-full bg-black bg-opacity-50 text-white hover:bg-opacity-75 focus:outline-none"
             (click)="previous()"
           >
             <i class="fas fa-chevron-left"></i>
           </button>
           <button
             type="button"
-            class="absolute top-1/2 right-4 -translate-y-1/2 p-2 rounded-full bg-black bg-opacity-50 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+            class="absolute top-1/2 right-4 -translate-y-1/2 p-2 rounded-full bg-black bg-opacity-50 text-white hover:bg-opacity-75 focus:outline-none"
             (click)="next()"
           >
             <i class="fas fa-chevron-right"></i>
@@ -79,177 +91,149 @@ interface CarouselSlide {
         <!-- Indicators -->
         @if (showIndicators && slides.length > 1) {
           <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
-            @for (slide of slides; track slide.id) {
+            @for (slide of slides; track slide.id; let i = $index) {
               <button
                 type="button"
-                class="w-2 h-2 rounded-full transition-all"
-                [class]="getIndicatorClasses(slides.indexOf(slide))"
-                (click)="goToSlide(slides.indexOf(slide))"
+                class="w-2 h-2 rounded-full transition-all duration-300 focus:outline-none"
+                [class]="getIndicatorClasses(i)"
+                (click)="goToSlide(i)"
               ></button>
             }
           </div>
         }
       </div>
-
-      <!-- Thumbnails -->
-      @if (showThumbnails && slides.length > 1) {
-        <div class="flex justify-center mt-4 space-x-2">
-          @for (slide of slides; track slide.id) {
-            <button
-              type="button"
-              class="relative w-16 h-16 rounded-lg overflow-hidden focus:outline-none"
-              [class]="getThumbnailClasses(slides.indexOf(slide))"
-              (click)="goToSlide(slides.indexOf(slide))"
-            >
-              @if (slide.image) {
-                <img
-                  [src]="slide.image"
-                  [alt]="slide.title"
-                  class="w-full h-full object-cover"
-                />
-              }
-            </button>
-          }
-        </div>
-      }
     </div>
-  `,
-  animations: [
-    trigger('slideAnimation', [
-      transition(':increment', [
-        style({ transform: 'translateX(100%)' }),
-        animate('300ms ease-out', style({ transform: 'translateX(0)' }))
-      ]),
-      transition(':decrement', [
-        style({ transform: 'translateX(-100%)' }),
-        animate('300ms ease-out', style({ transform: 'translateX(0)' }))
-      ])
-    ])
-  ]
+  `
 })
 export class CarouselComponent {
-  @ViewChild('slidesContainer') slidesContainer!: ElementRef;
-
   @Input() slides: CarouselSlide[] = [];
   @Input() currentIndex = 0;
-  @Input() autoPlay = true;
-  @Input() autoPlayInterval = 5000;
+  @Input() autoplay = true;
+  @Input() interval = 5000;
   @Input() showArrows = true;
   @Input() showIndicators = true;
-  @Input() showThumbnails = false;
   @Input() showCaptions = true;
-  @Input() maintainAspectRatio = true;
-  @Input() imageContain = false;
+  @Input() aspectRatio = '56.25%'; // 16:9
+  @Input() clickable = false;
   @Input() loop = true;
+  @Input() showControls = false;
+  @Input() muted = true;
 
   @Output() slideChange = new EventEmitter<number>();
+  @Output() slideClick = new EventEmitter<CarouselSlide>();
 
-  private autoPlayTimer?: number;
+  private autoplayInterval?: number;
 
   ngOnInit(): void {
-    if (this.autoPlay) {
-      this.startAutoPlay();
+    if (this.autoplay) {
+      this.startAutoplay();
     }
   }
 
   ngOnDestroy(): void {
-    this.stopAutoPlay();
-  }
-
-  ngOnChanges(): void {
-    if (this.autoPlay) {
-      this.restartAutoPlay();
-    }
-  }
-
-  previous(): void {
-    this.goToSlide(this.currentIndex - 1);
-  }
-
-  next(): void {
-    this.goToSlide(this.currentIndex + 1);
-  }
-
-  goToSlide(index: number): void {
-    if (this.loop) {
-      if (index < 0) {
-        index = this.slides.length - 1;
-      } else if (index >= this.slides.length) {
-        index = 0;
-      }
-    } else {
-      if (index < 0 || index >= this.slides.length) {
-        return;
-      }
-    }
-
-    this.currentIndex = index;
-    this.slideChange.emit(index);
-    this.restartAutoPlay();
-  }
-
-  getAnimationState(index: number): string {
-    return `${index}`;
+    this.stopAutoplay();
   }
 
   getIndicatorClasses(index: number): string {
     return `
       ${index === this.currentIndex
-        ? 'bg-white w-4'
-        : 'bg-white bg-opacity-50 hover:bg-opacity-75'}
+        ? 'bg-white w-3'
+        : 'bg-white bg-opacity-50 hover:bg-opacity-75'
+      }
     `;
   }
 
-  getThumbnailClasses(index: number): string {
-    return `
-      ${index === this.currentIndex
-        ? 'ring-2 ring-primary-500'
-        : 'opacity-50 hover:opacity-75'}
-    `;
+  previous(): void {
+    this.goToSlide(
+      this.currentIndex === 0
+        ? (this.loop ? this.slides.length - 1 : 0)
+        : this.currentIndex - 1
+    );
   }
 
-  private startAutoPlay(): void {
-    if (this.slides.length > 1) {
-      this.autoPlayTimer = window.setInterval(() => {
+  next(): void {
+    this.goToSlide(
+      this.currentIndex === this.slides.length - 1
+        ? (this.loop ? 0 : this.slides.length - 1)
+        : this.currentIndex + 1
+    );
+  }
+
+  goToSlide(index: number): void {
+    if (index !== this.currentIndex && index >= 0 && index < this.slides.length) {
+      this.currentIndex = index;
+      this.slideChange.emit(this.currentIndex);
+      if (this.autoplay) {
+        this.resetAutoplay();
+      }
+    }
+  }
+
+  onSlideClick(slide: CarouselSlide): void {
+    if (this.clickable) {
+      this.slideClick.emit(slide);
+    }
+  }
+
+  private startAutoplay(): void {
+    this.autoplayInterval = window.setInterval(() => {
+      if (this.loop || this.currentIndex < this.slides.length - 1) {
         this.next();
-      }, this.autoPlayInterval);
+      }
+    }, this.interval);
+  }
+
+  private stopAutoplay(): void {
+    if (this.autoplayInterval) {
+      clearInterval(this.autoplayInterval);
     }
   }
 
-  private stopAutoPlay(): void {
-    if (this.autoPlayTimer) {
-      clearInterval(this.autoPlayTimer);
-    }
-  }
-
-  private restartAutoPlay(): void {
-    this.stopAutoPlay();
-    if (this.autoPlay) {
-      this.startAutoPlay();
+  private resetAutoplay(): void {
+    this.stopAutoplay();
+    if (this.autoplay) {
+      this.startAutoplay();
     }
   }
 
   // Helper method to add slide
   addSlide(slide: CarouselSlide): void {
-    this.slides = [...this.slides, slide];
+    this.slides.push(slide);
   }
 
   // Helper method to remove slide
-  removeSlide(slideId: string | number): void {
-    const index = this.slides.findIndex(slide => slide.id === slideId);
+  removeSlide(id: string | number): void {
+    const index = this.slides.findIndex(s => s.id === id);
     if (index !== -1) {
-      this.slides = this.slides.filter(slide => slide.id !== slideId);
+      this.slides.splice(index, 1);
       if (this.currentIndex >= this.slides.length) {
-        this.goToSlide(this.slides.length - 1);
+        this.currentIndex = this.slides.length - 1;
       }
     }
   }
 
-  // Helper method to update slide
-  updateSlide(slideId: string | number, updates: Partial<CarouselSlide>): void {
-    this.slides = this.slides.map(slide =>
-      slide.id === slideId ? { ...slide, ...updates } : slide
-    );
+  // Helper method to set slides
+  setSlides(slides: CarouselSlide[]): void {
+    this.slides = slides;
+    this.currentIndex = 0;
+  }
+
+  // Helper method to toggle autoplay
+  toggleAutoplay(enabled: boolean): void {
+    this.autoplay = enabled;
+    if (enabled) {
+      this.startAutoplay();
+    } else {
+      this.stopAutoplay();
+    }
+  }
+
+  // Helper method to set interval
+  setInterval(interval: number): void {
+    this.interval = interval;
+    if (this.autoplay) {
+      this.resetAutoplay();
+    }
   }
 
   // Helper method to get current slide
@@ -267,24 +251,18 @@ export class CarouselComponent {
     return this.loop || this.currentIndex < this.slides.length - 1;
   }
 
-  // Helper method to toggle autoplay
-  toggleAutoPlay(enabled: boolean): void {
-    this.autoPlay = enabled;
-    if (enabled) {
-      this.startAutoPlay();
-    } else {
-      this.stopAutoPlay();
-    }
+  // Helper method to get slide count
+  getSlideCount(): number {
+    return this.slides.length;
   }
 
-  // Helper method to set interval
-  setInterval(interval: number): void {
-    this.autoPlayInterval = interval;
-    this.restartAutoPlay();
+  // Helper method to check if is first slide
+  isFirstSlide(): boolean {
+    return this.currentIndex === 0;
   }
 
-  // Helper method to get slide index
-  getSlideIndex(slideId: string | number): number {
-    return this.slides.findIndex(slide => slide.id === slideId);
+  // Helper method to check if is last slide
+  isLastSlide(): boolean {
+    return this.currentIndex === this.slides.length - 1;
   }
 }
