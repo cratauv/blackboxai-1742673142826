@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-type TagVariant = 'primary' | 'secondary' | 'success' | 'warning' | 'danger' | 'info';
+type TagType = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info';
 type TagSize = 'sm' | 'md' | 'lg';
+type TagVariant = 'solid' | 'soft' | 'outline';
 
 @Component({
   selector: 'app-tag',
@@ -10,48 +11,34 @@ type TagSize = 'sm' | 'md' | 'lg';
   imports: [CommonModule],
   template: `
     <div
-      class="inline-flex items-center"
+      class="inline-flex items-center justify-center"
       [class]="getTagClasses()"
       [class.cursor-pointer]="clickable"
-      [class.hover:shadow-sm]="clickable"
-      (click)="onClick()"
+      [class.opacity-50]="disabled"
+      (click)="onClick($event)"
     >
       <!-- Leading Icon -->
       @if (icon) {
-        <i 
+        <i
           [class]="icon"
-          class="mr-1.5"
-          [class.text-xs]="size === 'sm'"
-          [class.text-sm]="size === 'md'"
-          [class.text-base]="size === 'lg'"
+          [class.mr-1.5]="!!label"
+          [class]="getIconClasses()"
         ></i>
       }
 
       <!-- Label -->
-      <span class="truncate">{{ label }}</span>
-
-      <!-- Counter -->
-      @if (count !== undefined) {
-        <span 
-          class="ml-1.5 rounded-full bg-white bg-opacity-20 px-1.5"
-          [class.text-xs]="size === 'sm'"
-          [class.text-sm]="size === 'md'"
-          [class.text-base]="size === 'lg'"
-        >
-          {{ count }}
-        </span>
+      @if (label) {
+        <span class="truncate">{{ label }}</span>
       }
 
       <!-- Remove Button -->
-      @if (removable) {
+      @if (removable && !disabled) {
         <button
           type="button"
-          class="ml-1.5 hover:text-opacity-75 focus:outline-none"
-          [class.text-xs]="size === 'sm'"
-          [class.text-sm]="size === 'md'"
-          [class.text-base]="size === 'lg'"
+          class="ml-1.5 focus:outline-none"
+          [class]="getRemoveButtonClasses()"
           (click)="onRemove($event)"
-          [attr.aria-label]="'Remove ' + label"
+          aria-label="Remove"
         >
           <i class="fas fa-times"></i>
         </button>
@@ -60,161 +47,198 @@ type TagSize = 'sm' | 'md' | 'lg';
   `
 })
 export class TagComponent {
-  @Input() label = '';
-  @Input() variant: TagVariant = 'primary';
+  @Input() type: TagType = 'primary';
   @Input() size: TagSize = 'md';
+  @Input() variant: TagVariant = 'solid';
+  @Input() label = '';
   @Input() icon = '';
-  @Input() count?: number;
   @Input() removable = false;
   @Input() clickable = false;
-  @Input() outlined = false;
+  @Input() disabled = false;
+  @Input() selected = false;
 
   @Output() remove = new EventEmitter<void>();
   @Output() click = new EventEmitter<void>();
 
+  private readonly sizeMap = {
+    sm: {
+      base: 'px-2 py-0.5 text-xs',
+      icon: 'text-xs'
+    },
+    md: {
+      base: 'px-2.5 py-1 text-sm',
+      icon: 'text-sm'
+    },
+    lg: {
+      base: 'px-3 py-1.5 text-base',
+      icon: 'text-base'
+    }
+  };
+
+  private readonly colorMap = {
+    solid: {
+      primary: 'bg-primary-500 text-white hover:bg-primary-600',
+      secondary: 'bg-gray-500 text-white hover:bg-gray-600',
+      success: 'bg-green-500 text-white hover:bg-green-600',
+      danger: 'bg-red-500 text-white hover:bg-red-600',
+      warning: 'bg-yellow-500 text-white hover:bg-yellow-600',
+      info: 'bg-blue-500 text-white hover:bg-blue-600'
+    },
+    soft: {
+      primary: 'bg-primary-50 text-primary-700 hover:bg-primary-100',
+      secondary: 'bg-gray-50 text-gray-700 hover:bg-gray-100',
+      success: 'bg-green-50 text-green-700 hover:bg-green-100',
+      danger: 'bg-red-50 text-red-700 hover:bg-red-100',
+      warning: 'bg-yellow-50 text-yellow-700 hover:bg-yellow-100',
+      info: 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+    },
+    outline: {
+      primary: 'border border-primary-500 text-primary-500 hover:bg-primary-50',
+      secondary: 'border border-gray-500 text-gray-500 hover:bg-gray-50',
+      success: 'border border-green-500 text-green-500 hover:bg-green-50',
+      danger: 'border border-red-500 text-red-500 hover:bg-red-50',
+      warning: 'border border-yellow-500 text-yellow-500 hover:bg-yellow-50',
+      info: 'border border-blue-500 text-blue-500 hover:bg-blue-50'
+    }
+  };
+
   getTagClasses(): string {
-    const baseClasses = 'rounded-full transition-all duration-200';
-    const sizeClasses = this.getSizeClasses();
-    const variantClasses = this.getVariantClasses();
-    const outlineClasses = this.outlined ? this.getOutlineClasses() : '';
-    
-    return `${baseClasses} ${sizeClasses} ${variantClasses} ${outlineClasses}`.trim();
+    return `
+      ${this.sizeMap[this.size].base}
+      ${this.colorMap[this.variant][this.type]}
+      rounded-md
+      font-medium
+      transition-colors
+      ${this.selected ? 'ring-2 ring-offset-2' : ''}
+      ${this.clickable && !this.disabled ? 'cursor-pointer' : ''}
+    `.trim();
   }
 
-  private getSizeClasses(): string {
-    const sizes = {
-      sm: 'px-2 py-0.5 text-xs',
-      md: 'px-2.5 py-1 text-sm',
-      lg: 'px-3 py-1.5 text-base'
+  getIconClasses(): string {
+    return this.sizeMap[this.size].icon;
+  }
+
+  getRemoveButtonClasses(): string {
+    const hoverColors = {
+      solid: {
+        primary: 'hover:text-primary-200',
+        secondary: 'hover:text-gray-200',
+        success: 'hover:text-green-200',
+        danger: 'hover:text-red-200',
+        warning: 'hover:text-yellow-200',
+        info: 'hover:text-blue-200'
+      },
+      soft: {
+        primary: 'hover:text-primary-800',
+        secondary: 'hover:text-gray-800',
+        success: 'hover:text-green-800',
+        danger: 'hover:text-red-800',
+        warning: 'hover:text-yellow-800',
+        info: 'hover:text-blue-800'
+      },
+      outline: {
+        primary: 'hover:text-primary-700',
+        secondary: 'hover:text-gray-700',
+        success: 'hover:text-green-700',
+        danger: 'hover:text-red-700',
+        warning: 'hover:text-yellow-700',
+        info: 'hover:text-blue-700'
+      }
     };
-    return sizes[this.size];
+
+    return `
+      ${this.sizeMap[this.size].icon}
+      ${hoverColors[this.variant][this.type]}
+    `;
   }
 
-  private getVariantClasses(): string {
-    if (this.outlined) return '';
-
-    const variants = {
-      primary: 'bg-primary-100 text-primary-800',
-      secondary: 'bg-gray-100 text-gray-800',
-      success: 'bg-green-100 text-green-800',
-      warning: 'bg-yellow-100 text-yellow-800',
-      danger: 'bg-red-100 text-red-800',
-      info: 'bg-blue-100 text-blue-800'
-    };
-    return variants[this.variant];
-  }
-
-  private getOutlineClasses(): string {
-    const variants = {
-      primary: 'border border-primary-500 text-primary-700',
-      secondary: 'border border-gray-500 text-gray-700',
-      success: 'border border-green-500 text-green-700',
-      warning: 'border border-yellow-500 text-yellow-700',
-      danger: 'border border-red-500 text-red-700',
-      info: 'border border-blue-500 text-blue-700'
-    };
-    return variants[this.variant];
-  }
-
-  onClick(): void {
-    if (this.clickable) {
+  onClick(event: MouseEvent): void {
+    if (!this.disabled && this.clickable) {
       this.click.emit();
     }
   }
 
-  onRemove(event: Event): void {
+  onRemove(event: MouseEvent): void {
     event.stopPropagation();
-    this.remove.emit();
-  }
-
-  // Helper method to get background color
-  getBgColor(): string {
-    const colors = {
-      primary: '#EBF5FF',
-      secondary: '#F3F4F6',
-      success: '#DEF7EC',
-      warning: '#FEF3C7',
-      danger: '#FEE2E2',
-      info: '#DBEAFE'
-    };
-    return colors[this.variant];
-  }
-
-  // Helper method to get text color
-  getTextColor(): string {
-    const colors = {
-      primary: '#1E40AF',
-      secondary: '#1F2937',
-      success: '#065F46',
-      warning: '#92400E',
-      danger: '#991B1B',
-      info: '#1E40AF'
-    };
-    return colors[this.variant];
-  }
-
-  // Helper method to get border color
-  getBorderColor(): string {
-    const colors = {
-      primary: '#3B82F6',
-      secondary: '#6B7280',
-      success: '#10B981',
-      warning: '#F59E0B',
-      danger: '#EF4444',
-      info: '#3B82F6'
-    };
-    return colors[this.variant];
-  }
-
-  // Helper method to get hover background color
-  getHoverBgColor(): string {
-    const colors = {
-      primary: '#DBEAFE',
-      secondary: '#E5E7EB',
-      success: '#D1FAE5',
-      warning: '#FEF3C7',
-      danger: '#FEE2E2',
-      info: '#DBEAFE'
-    };
-    return colors[this.variant];
-  }
-
-  // Helper method to format count
-  formatCount(): string {
-    if (this.count === undefined) return '';
-    if (this.count > 999) {
-      return `${Math.floor(this.count / 1000)}k+`;
+    if (!this.disabled) {
+      this.remove.emit();
     }
-    return this.count.toString();
   }
 
-  // Helper method to get icon color
-  getIconColor(): string {
-    if (this.outlined) {
-      return this.getTextColor();
+  // Helper method to set type
+  setType(type: TagType): void {
+    this.type = type;
+  }
+
+  // Helper method to set size
+  setSize(size: TagSize): void {
+    this.size = size;
+  }
+
+  // Helper method to set variant
+  setVariant(variant: TagVariant): void {
+    this.variant = variant;
+  }
+
+  // Helper method to set label
+  setLabel(label: string): void {
+    this.label = label;
+  }
+
+  // Helper method to set icon
+  setIcon(icon: string): void {
+    this.icon = icon;
+  }
+
+  // Helper method to toggle selected state
+  toggleSelected(): void {
+    if (!this.disabled) {
+      this.selected = !this.selected;
     }
-    return this.getTextColor();
   }
 
-  // Helper method to check if tag is active
-  isActive(): boolean {
-    return this.clickable && this.variant !== 'secondary';
+  // Helper method to toggle disabled state
+  toggleDisabled(): void {
+    this.disabled = !this.disabled;
   }
 
-  // Helper method to get ARIA attributes
-  getAriaAttributes(): { [key: string]: string } {
-    const attrs: { [key: string]: string } = {
-      role: this.clickable ? 'button' : 'status'
+  // Helper method to toggle removable
+  toggleRemovable(): void {
+    this.removable = !this.removable;
+  }
+
+  // Helper method to toggle clickable
+  toggleClickable(): void {
+    this.clickable = !this.clickable;
+  }
+
+  // Helper method to get color scheme
+  getColorScheme(): { background: string; text: string; border?: string } {
+    const classes = this.colorMap[this.variant][this.type].split(' ');
+    return {
+      background: classes.find(c => c.startsWith('bg-')) || '',
+      text: classes.find(c => c.startsWith('text-')) || '',
+      border: classes.find(c => c.startsWith('border-'))
     };
+  }
 
-    if (this.clickable) {
-      attrs['aria-pressed'] = 'false';
-    }
+  // Helper method to check if has icon
+  hasIcon(): boolean {
+    return !!this.icon;
+  }
 
-    if (this.removable) {
-      attrs['aria-removable'] = 'true';
-    }
+  // Helper method to check if has label
+  hasLabel(): boolean {
+    return !!this.label;
+  }
 
-    return attrs;
+  // Helper method to get dimensions
+  getDimensions(): { height: string; minWidth: string } {
+    const sizes = {
+      sm: { height: '1.5rem', minWidth: '1.5rem' },
+      md: { height: '2rem', minWidth: '2rem' },
+      lg: { height: '2.5rem', minWidth: '2.5rem' }
+    };
+    return sizes[this.size];
   }
 }
