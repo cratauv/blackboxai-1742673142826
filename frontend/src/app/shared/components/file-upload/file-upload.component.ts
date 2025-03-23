@@ -1,13 +1,13 @@
-import { Component, Input, Output, EventEmitter, HostListener } from '@angular/core';
+import { Component, Input, Output, EventEmitter, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-export interface UploadedFile {
-  file: File;
+interface UploadFile {
   id: string;
+  file: File;
   progress: number;
   status: 'pending' | 'uploading' | 'success' | 'error';
   error?: string;
-  url?: string;
+  preview?: string;
 }
 
 @Component({
@@ -15,13 +15,59 @@ export interface UploadedFile {
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="w-full">
-      <!-- Upload Area -->
+    <div class="space-y-4">
+      <!-- Upload Zone -->
       <div
-        class="relative flex flex-col items-center justify-center w-full"
-        [class.cursor-pointer]="!disabled"
+        #dropZone
+        class="relative border-2 border-dashed rounded-lg p-6 transition-colors"
+        [class.border-gray-300]="!isDragging"
+        [class.border-primary-500]="isDragging"
+        [class.bg-gray-50]="!isDragging"
+        [class.bg-primary-50]="isDragging"
         [class.opacity-50]="disabled"
+        (dragenter)="onDragEnter($event)"
+        (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave($event)"
+        (drop)="onDrop($event)"
       >
+        <!-- Upload Icon -->
+        <div class="text-center">
+          <i 
+            class="fas fa-cloud-upload-alt text-4xl"
+            [class.text-gray-400]="!isDragging"
+            [class.text-primary-500]="isDragging"
+          ></i>
+        </div>
+
+        <!-- Upload Text -->
+        <div class="mt-4 text-center">
+          <p class="text-sm text-gray-600">
+            Drag and drop files here, or
+            <button
+              type="button"
+              class="text-primary-600 hover:text-primary-700 focus:outline-none"
+              [class.cursor-not-allowed]="disabled"
+              (click)="openFileDialog()"
+            >
+              browse
+            </button>
+            to upload
+          </p>
+          <p class="mt-1 text-xs text-gray-500">
+            {{ getFileTypeText() }}
+          </p>
+          @if (maxFiles > 0) {
+            <p class="mt-1 text-xs text-gray-500">
+              Maximum {{ maxFiles }} file{{ maxFiles === 1 ? '' : 's' }}
+            </p>
+          }
+          @if (maxSize > 0) {
+            <p class="mt-1 text-xs text-gray-500">
+              Maximum size: {{ formatSize(maxSize) }}
+            </p>
+          }
+        </div>
+
         <!-- Hidden File Input -->
         <input
           #fileInput
@@ -29,141 +75,117 @@ export interface UploadedFile {
           class="hidden"
           [accept]="accept"
           [multiple]="multiple"
-          [disabled]="disabled"
           (change)="onFileSelected($event)"
         />
-
-        <!-- Drag & Drop Zone -->
-        <div
-          class="w-full border-2 border-dashed rounded-lg p-8 text-center"
-          [class.border-primary-400]="isDragging"
-          [class.bg-primary-50]="isDragging"
-          [class.border-gray-300]="!isDragging"
-          [class.hover:border-primary-400]="!disabled"
-          [class.hover:bg-gray-50]="!disabled"
-          (click)="!disabled && fileInput.click()"
-          (dragover)="onDragOver($event)"
-          (dragleave)="onDragLeave($event)"
-          (drop)="onDrop($event)"
-        >
-          <!-- Upload Icon -->
-          <div class="mx-auto mb-4">
-            <i 
-              class="fas fa-cloud-upload-alt text-4xl"
-              [class.text-primary-600]="isDragging"
-              [class.text-gray-400]="!isDragging"
-            ></i>
-          </div>
-
-          <!-- Upload Text -->
-          <p class="mb-2 text-sm text-gray-500">
-            <span class="font-semibold">Click to upload</span> or drag and drop
-          </p>
-          <p class="text-xs text-gray-500">
-            {{ acceptText }}
-          </p>
-          @if (maxSize) {
-            <p class="text-xs text-gray-500">
-              Max file size: {{ formatSize(maxSize) }}
-            </p>
-          }
-        </div>
       </div>
 
       <!-- File List -->
       @if (files.length > 0) {
-        <ul class="mt-4 space-y-2">
+        <div class="space-y-2">
           @for (file of files; track file.id) {
-            <li class="relative bg-white rounded-lg border p-4">
-              <div class="flex items-center justify-between">
-                <!-- File Info -->
-                <div class="flex items-center min-w-0 flex-1">
-                  <!-- File Icon -->
-                  <i 
-                    class="fas"
-                    [class.fa-file-image]="isImageFile(file.file)"
-                    [class.fa-file-pdf]="isPdfFile(file.file)"
-                    [class.fa-file-alt]="!isImageFile(file.file) && !isPdfFile(file.file)"
-                    class="text-gray-400 mr-3"
-                  ></i>
-
-                  <!-- File Details -->
-                  <div class="min-w-0 flex-1">
-                    <p class="text-sm font-medium text-gray-900 truncate">
-                      {{ file.file.name }}
-                    </p>
-                    <p class="text-xs text-gray-500">
-                      {{ formatSize(file.file.size) }}
-                    </p>
-                  </div>
+            <div
+              class="flex items-center p-3 bg-white border rounded-lg"
+              [class.border-primary-200]="file.status === 'uploading'"
+              [class.border-green-200]="file.status === 'success'"
+              [class.border-red-200]="file.status === 'error'"
+            >
+              <!-- File Preview -->
+              @if (file.preview) {
+                <div class="flex-shrink-0 w-10 h-10 mr-3">
+                  <img
+                    [src]="file.preview"
+                    class="w-full h-full object-cover rounded"
+                    alt="File preview"
+                  />
                 </div>
-
-                <!-- Status/Actions -->
-                <div class="ml-4 flex items-center space-x-2">
-                  <!-- Progress -->
-                  @if (file.status === 'uploading') {
-                    <div class="w-24 bg-gray-200 rounded-full h-2">
-                      <div
-                        class="bg-primary-600 h-2 rounded-full"
-                        [style.width.%]="file.progress"
-                      ></div>
-                    </div>
-                  }
-
-                  <!-- Status Icon -->
-                  @if (file.status === 'success') {
-                    <i class="fas fa-check-circle text-green-500"></i>
-                  } @else if (file.status === 'error') {
-                    <i class="fas fa-exclamation-circle text-red-500"></i>
-                  }
-
-                  <!-- Remove Button -->
-                  <button
-                    type="button"
-                    (click)="removeFile(file)"
-                    class="text-gray-400 hover:text-gray-500"
-                    [class.cursor-not-allowed]="disabled"
-                    [disabled]="disabled"
-                  >
-                    <i class="fas fa-times"></i>
-                  </button>
+              } @else {
+                <div class="flex-shrink-0 w-10 h-10 mr-3 bg-gray-100 rounded flex items-center justify-center">
+                  <i class="fas fa-file text-gray-400"></i>
                 </div>
+              }
+
+              <!-- File Info -->
+              <div class="flex-1 min-w-0">
+                <p class="text-sm font-medium text-gray-900 truncate">
+                  {{ file.file.name }}
+                </p>
+                <p class="text-xs text-gray-500">
+                  {{ formatSize(file.file.size) }}
+                </p>
               </div>
 
-              <!-- Error Message -->
-              @if (file.status === 'error' && file.error) {
-                <p class="mt-2 text-xs text-red-600">
-                  {{ file.error }}
-                </p>
-              }
-            </li>
+              <!-- Progress/Status -->
+              <div class="ml-4 flex-shrink-0">
+                @switch (file.status) {
+                  @case ('uploading') {
+                    <div class="w-24">
+                      <div class="h-1 bg-gray-200 rounded-full overflow-hidden">
+                        <div
+                          class="h-full bg-primary-500 transition-all duration-300"
+                          [style.width.%]="file.progress"
+                        ></div>
+                      </div>
+                      <p class="mt-1 text-xs text-center text-gray-500">
+                        {{ file.progress }}%
+                      </p>
+                    </div>
+                  }
+                  @case ('success') {
+                    <i class="fas fa-check-circle text-green-500"></i>
+                  }
+                  @case ('error') {
+                    <div class="flex items-center">
+                      <i class="fas fa-exclamation-circle text-red-500"></i>
+                      <button
+                        type="button"
+                        class="ml-2 text-sm text-primary-600 hover:text-primary-700"
+                        (click)="retryUpload(file)"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  }
+                  @default {
+                    <button
+                      type="button"
+                      class="text-gray-400 hover:text-gray-500"
+                      (click)="removeFile(file)"
+                    >
+                      <i class="fas fa-times"></i>
+                    </button>
+                  }
+                }
+              </div>
+            </div>
           }
-        </ul>
+        </div>
       }
     </div>
   `
 })
 export class FileUploadComponent {
-  @Input() accept = '*/*';
-  @Input() multiple = false;
-  @Input() maxSize?: number; // in bytes
+  @ViewChild('fileInput') fileInput!: ElementRef<HTMLInputElement>;
+  @ViewChild('dropZone') dropZone!: ElementRef<HTMLDivElement>;
+
+  @Input() accept = '*';
+  @Input() multiple = true;
+  @Input() maxFiles = 0;
+  @Input() maxSize = 0; // in bytes
   @Input() disabled = false;
-  @Input() maxFiles = 10;
+  @Input() showPreviews = true;
+  @Input() autoUpload = true;
 
-  @Output() filesChange = new EventEmitter<File[]>();
+  @Output() filesSelected = new EventEmitter<File[]>();
   @Output() fileRemoved = new EventEmitter<File>();
-  @Output() error = new EventEmitter<string>();
+  @Output() uploadStart = new EventEmitter<File>();
+  @Output() uploadProgress = new EventEmitter<{ file: File; progress: number }>();
+  @Output() uploadSuccess = new EventEmitter<File>();
+  @Output() uploadError = new EventEmitter<{ file: File; error: string }>();
 
-  files: UploadedFile[] = [];
+  files: UploadFile[] = [];
   isDragging = false;
 
-  get acceptText(): string {
-    if (this.accept === '*/*') return 'All file types accepted';
-    return `Accepted file types: ${this.accept}`;
-  }
-
-  @HostListener('dragover', ['$event'])
-  onDragOver(event: DragEvent): void {
+  onDragEnter(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
     if (!this.disabled) {
@@ -171,14 +193,19 @@ export class FileUploadComponent {
     }
   }
 
-  @HostListener('dragleave', ['$event'])
+  onDragOver(event: DragEvent): void {
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   onDragLeave(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
-    this.isDragging = false;
+    if (!event.relatedTarget || !this.dropZone.nativeElement.contains(event.relatedTarget as Node)) {
+      this.isDragging = false;
+    }
   }
 
-  @HostListener('drop', ['$event'])
   onDrop(event: DragEvent): void {
     event.preventDefault();
     event.stopPropagation();
@@ -186,79 +213,126 @@ export class FileUploadComponent {
 
     if (this.disabled) return;
 
-    const files = event.dataTransfer?.files;
-    if (files) {
-      this.handleFiles(Array.from(files));
+    const files = Array.from(event.dataTransfer?.files || []);
+    this.handleFiles(files);
+  }
+
+  openFileDialog(): void {
+    if (!this.disabled) {
+      this.fileInput.nativeElement.click();
     }
   }
 
   onFileSelected(event: Event): void {
     const input = event.target as HTMLInputElement;
-    if (input.files) {
-      this.handleFiles(Array.from(input.files));
-    }
+    const files = Array.from(input.files || []);
+    this.handleFiles(files);
+    input.value = '';
   }
 
-  handleFiles(newFiles: File[]): void {
-    // Check max files limit
-    if (this.files.length + newFiles.length > this.maxFiles) {
-      this.error.emit(`Maximum ${this.maxFiles} files allowed`);
+  private handleFiles(files: File[]): void {
+    if (this.maxFiles > 0 && this.files.length + files.length > this.maxFiles) {
+      this.emitError(files[0], `Maximum ${this.maxFiles} files allowed`);
       return;
     }
 
-    // Process each file
-    newFiles.forEach(file => {
-      // Check file type
+    const validFiles = files.filter(file => {
+      if (this.maxSize > 0 && file.size > this.maxSize) {
+        this.emitError(file, `File size exceeds ${this.formatSize(this.maxSize)}`);
+        return false;
+      }
+
       if (!this.isValidFileType(file)) {
-        this.error.emit(`File type not accepted: ${file.name}`);
-        return;
+        this.emitError(file, 'File type not allowed');
+        return false;
       }
 
-      // Check file size
-      if (this.maxSize && file.size > this.maxSize) {
-        this.error.emit(`File too large: ${file.name}`);
-        return;
-      }
-
-      // Add file to list
-      this.files.push({
-        file,
-        id: this.generateId(),
-        progress: 0,
-        status: 'pending'
-      });
+      return true;
     });
 
-    // Emit updated files
-    this.emitFiles();
-  }
+    if (validFiles.length === 0) return;
 
-  removeFile(file: UploadedFile): void {
-    const index = this.files.indexOf(file);
-    if (index > -1) {
-      this.files.splice(index, 1);
-      this.fileRemoved.emit(file.file);
-      this.emitFiles();
+    const newFiles = validFiles.map(file => ({
+      id: this.generateId(),
+      file,
+      progress: 0,
+      status: 'pending' as const,
+      preview: this.showPreviews ? this.getFilePreview(file) : undefined
+    }));
+
+    this.files = [...this.files, ...newFiles];
+    this.filesSelected.emit(validFiles);
+
+    if (this.autoUpload) {
+      newFiles.forEach(file => this.uploadFile(file));
     }
   }
 
-  private emitFiles(): void {
-    this.filesChange.emit(this.files.map(f => f.file));
+  removeFile(file: UploadFile): void {
+    const index = this.files.indexOf(file);
+    if (index !== -1) {
+      this.files.splice(index, 1);
+      this.fileRemoved.emit(file.file);
+    }
+  }
+
+  retryUpload(file: UploadFile): void {
+    file.status = 'pending';
+    file.progress = 0;
+    file.error = undefined;
+    this.uploadFile(file);
+  }
+
+  private uploadFile(file: UploadFile): void {
+    file.status = 'uploading';
+    this.uploadStart.emit(file.file);
+
+    // Simulate upload progress
+    let progress = 0;
+    const interval = setInterval(() => {
+      progress += 10;
+      file.progress = progress;
+      this.uploadProgress.emit({ file: file.file, progress });
+
+      if (progress >= 100) {
+        clearInterval(interval);
+        file.status = 'success';
+        this.uploadSuccess.emit(file.file);
+      }
+    }, 500);
+  }
+
+  private emitError(file: File, error: string): void {
+    this.uploadError.emit({ file, error });
+  }
+
+  private isValidFileType(file: File): boolean {
+    if (this.accept === '*') return true;
+    const acceptedTypes = this.accept.split(',').map(type => type.trim());
+    return acceptedTypes.some(type => {
+      if (type.startsWith('.')) {
+        return file.name.toLowerCase().endsWith(type.toLowerCase());
+      }
+      if (type.includes('/*')) {
+        const [baseType] = type.split('/');
+        return file.type.startsWith(`${baseType}/`);
+      }
+      return file.type === type;
+    });
+  }
+
+  private getFilePreview(file: File): string | undefined {
+    if (!file.type.startsWith('image/')) return undefined;
+    return URL.createObjectURL(file);
   }
 
   private generateId(): string {
     return Math.random().toString(36).substring(2);
   }
 
-  private isValidFileType(file: File): boolean {
-    if (this.accept === '*/*') return true;
-    const acceptedTypes = this.accept.split(',').map(type => type.trim());
-    return acceptedTypes.some(type => {
-      if (type.startsWith('.')) {
-        return file.name.toLowerCase().endsWith(type.toLowerCase());
-      }
-      return file.type.match(new RegExp(type.replace('*', '.*')));
-    });
+  getFileTypeText(): string {
+    if (this.accept === '*') return 'All file types allowed';
+    return `Allowed types: ${this.accept}`;
   }
 
   formatSize(bytes: number): string {
@@ -269,35 +343,54 @@ export class FileUploadComponent {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
   }
 
-  isImageFile(file: File): boolean {
-    return file.type.startsWith('image/');
-  }
-
-  isPdfFile(file: File): boolean {
-    return file.type === 'application/pdf';
-  }
-
-  // Helper method to update file status
-  updateFileStatus(fileId: string, status: UploadedFile['status'], progress = 0): void {
-    const file = this.files.find(f => f.id === fileId);
-    if (file) {
-      file.status = status;
-      file.progress = progress;
-    }
-  }
-
-  // Helper method to set file error
-  setFileError(fileId: string, error: string): void {
-    const file = this.files.find(f => f.id === fileId);
-    if (file) {
-      file.status = 'error';
-      file.error = error;
-    }
-  }
-
   // Helper method to clear all files
-  clearFiles(): void {
+  clear(): void {
     this.files = [];
-    this.emitFiles();
+  }
+
+  // Helper method to start upload
+  startUpload(): void {
+    this.files
+      .filter(file => file.status === 'pending')
+      .forEach(file => this.uploadFile(file));
+  }
+
+  // Helper method to cancel upload
+  cancelUpload(file: UploadFile): void {
+    if (file.status === 'uploading') {
+      file.status = 'pending';
+      file.progress = 0;
+    }
+  }
+
+  // Helper method to get file count
+  getFileCount(): number {
+    return this.files.length;
+  }
+
+  // Helper method to get total size
+  getTotalSize(): number {
+    return this.files.reduce((total, file) => total + file.file.size, 0);
+  }
+
+  // Helper method to check if has files
+  hasFiles(): boolean {
+    return this.files.length > 0;
+  }
+
+  // Helper method to get upload progress
+  getOverallProgress(): number {
+    if (this.files.length === 0) return 0;
+    return this.files.reduce((total, file) => total + file.progress, 0) / this.files.length;
+  }
+
+  // Helper method to check if all files uploaded
+  isUploadComplete(): boolean {
+    return this.files.every(file => file.status === 'success');
+  }
+
+  // Helper method to get failed uploads
+  getFailedUploads(): UploadFile[] {
+    return this.files.filter(file => file.status === 'error');
   }
 }
