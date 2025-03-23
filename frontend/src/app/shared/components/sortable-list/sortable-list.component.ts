@@ -1,14 +1,10 @@
-import { Component, Input, Output, EventEmitter, ElementRef, ViewChild } from '@angular/core';
+import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
 
-interface DragState {
-  index: number;
-  element: HTMLElement;
-  placeholder: HTMLElement;
-  startY: number;
-  currentY: number;
-  offsetY: number;
-  height: number;
+interface SortableItem {
+  id: string | number;
+  content: any;
+  disabled?: boolean;
 }
 
 @Component({
@@ -17,297 +13,235 @@ interface DragState {
   imports: [CommonModule],
   template: `
     <div
-      #container
-      class="relative"
+      class="w-full"
       [class.cursor-move]="!disabled"
+      (dragover)="onDragOver($event)"
     >
-      <!-- List Items -->
-      @for (item of items; track trackBy(item)) {
-        <div
-          class="relative transition-transform duration-200"
-          [class.opacity-50]="isDragging && dragState?.index === i"
-          [style.transform]="getItemTransform(i)"
-          [attr.data-index]="i"
-        >
-          <!-- Drag Handle -->
-          @if (!disabled) {
-            <div
-              class="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center cursor-move hover:bg-gray-50 group"
-              (mousedown)="onDragStart($event, i)"
-              (touchstart)="onTouchStart($event, i)"
-            >
-              <i class="fas fa-grip-vertical text-gray-400 group-hover:text-gray-600"></i>
-            </div>
-          }
-
-          <!-- Item Content -->
-          <div
+      <ul
+        role="list"
+        class="divide-y divide-gray-200"
+        [class.opacity-50]="disabled"
+      >
+        @for (item of items; track item.id) {
+          <li
+            [id]="'item-' + item.id"
             class="relative"
-            [class.pl-8]="!disabled"
-            [class.pointer-events-none]="isDragging"
+            [class]="getItemClasses(item)"
+            [attr.draggable]="!disabled && !item.disabled"
+            (dragstart)="onDragStart($event, item)"
+            (dragend)="onDragEnd()"
+            (dragover)="onItemDragOver($event, item)"
+            (drop)="onDrop($event, item)"
           >
-            <ng-container
-              [ngTemplateOutlet]="itemTemplate"
-              [ngTemplateOutletContext]="{ $implicit: item, index: i }"
-            ></ng-container>
-          </div>
+            <!-- Drag Handle -->
+            @if (!disabled && !item.disabled) {
+              <div class="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center cursor-move">
+                <i class="fas fa-grip-vertical text-gray-400"></i>
+              </div>
+            }
 
-          <!-- Drag Placeholder -->
-          @if (isDragging && dragState?.index === i) {
-            <div
-              class="absolute inset-0 border-2 border-dashed border-primary-500 rounded-lg bg-primary-50 bg-opacity-50"
-              [style.height.px]="dragState?.height"
-            ></div>
-          }
-        </div>
-      }
+            <!-- Item Content -->
+            <div [class]="getContentClasses()">
+              @switch (typeof item.content) {
+                @case ('string') {
+                  {{ item.content }}
+                }
+                @default {
+                  <ng-container [ngTemplateOutlet]="item.content"></ng-container>
+                }
+              }
+            </div>
+
+            <!-- Drop Indicator -->
+            @if (draggedItem && draggedItem !== item) {
+              <div
+                class="absolute inset-x-0"
+                [class]="getDropIndicatorClasses(item)"
+              ></div>
+            }
+          </li>
+        }
+      </ul>
 
       <!-- Empty State -->
       @if (items.length === 0) {
-        <div class="p-8 text-center text-gray-500">
-          {{ emptyMessage }}
+        <div class="text-center py-6 bg-gray-50 rounded-lg">
+          <p class="text-sm text-gray-500">
+            {{ emptyMessage }}
+          </p>
         </div>
       }
     </div>
   `,
   styles: [`
-    :host {
-      display: block;
+    .drop-above {
+      border-top: 2px solid #3b82f6;
+    }
+
+    .drop-below {
+      border-bottom: 2px solid #3b82f6;
     }
   `]
 })
 export class SortableListComponent {
-  @ViewChild('container') container!: ElementRef<HTMLElement>;
-
-  @Input() items: any[] = [];
+  @Input() items: SortableItem[] = [];
   @Input() disabled = false;
   @Input() emptyMessage = 'No items to display';
-  @Input() itemTemplate: any;
-  @Input() trackBy: (item: any) => any = item => item;
+  @Input() animation = true;
 
-  @Output() itemsChange = new EventEmitter<any[]>();
-  @Output() orderChange = new EventEmitter<{ oldIndex: number; newIndex: number }>();
+  @Output() itemsChange = new EventEmitter<SortableItem[]>();
+  @Output() orderChanged = new EventEmitter<{ oldIndex: number; newIndex: number }>();
 
-  isDragging = false;
-  dragState?: DragState;
+  draggedItem: SortableItem | null = null;
+  dragOverItem: SortableItem | null = null;
+  dragPosition: 'above' | 'below' = 'below';
 
-  onDragStart(event: MouseEvent, index: number): void {
-    if (this.disabled) return;
+  getItemClasses(item: SortableItem): string {
+    return `
+      p-4 bg-white
+      ${!this.disabled && !item.disabled ? 'hover:bg-gray-50' : ''}
+      ${item === this.draggedItem ? 'opacity-50' : ''}
+      ${item.disabled ? 'cursor-not-allowed opacity-50' : ''}
+    `;
+  }
+
+  getContentClasses(): string {
+    return 'pl-8';  // Space for drag handle
+  }
+
+  getDropIndicatorClasses(item: SortableItem): string {
+    if (item !== this.dragOverItem) return '';
+    return this.dragPosition === 'above' ? 'drop-above' : 'drop-below';
+  }
+
+  onDragStart(event: DragEvent, item: SortableItem): void {
+    if (this.disabled || item.disabled) {
+      event.preventDefault();
+      return;
+    }
+
+    this.draggedItem = item;
+    event.dataTransfer?.setData('text/plain', item.id.toString());
+
+    // Set drag image
+    const dragImage = document.getElementById('item-' + item.id);
+    if (dragImage && event.dataTransfer) {
+      event.dataTransfer.setDragImage(dragImage, 0, 0);
+    }
+  }
+
+  onDragEnd(): void {
+    this.draggedItem = null;
+    this.dragOverItem = null;
+  }
+
+  onDragOver(event: DragEvent): void {
     event.preventDefault();
-    
-    const element = this.getItemElement(index);
-    if (!element) return;
-
-    this.startDrag(element, index, event.pageY);
-    
-    document.addEventListener('mousemove', this.onMouseMove);
-    document.addEventListener('mouseup', this.onDragEnd);
+    event.dataTransfer!.dropEffect = 'move';
   }
 
-  onTouchStart(event: TouchEvent, index: number): void {
-    if (this.disabled) return;
+  onItemDragOver(event: DragEvent, item: SortableItem): void {
     event.preventDefault();
-    
-    const element = this.getItemElement(index);
-    if (!element) return;
+    if (this.draggedItem === item) return;
 
-    this.startDrag(element, index, event.touches[0].pageY);
-    
-    document.addEventListener('touchmove', this.onTouchMove);
-    document.addEventListener('touchend', this.onDragEnd);
+    this.dragOverItem = item;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const midY = rect.top + rect.height / 2;
+    this.dragPosition = event.clientY < midY ? 'above' : 'below';
   }
 
-  private startDrag(element: HTMLElement, index: number, pageY: number): void {
-    const rect = element.getBoundingClientRect();
-    const height = rect.height;
+  onDrop(event: DragEvent, targetItem: SortableItem): void {
+    event.preventDefault();
+    if (!this.draggedItem || this.draggedItem === targetItem) return;
 
-    this.isDragging = true;
-    this.dragState = {
-      index,
-      element,
-      placeholder: element.cloneNode(true) as HTMLElement,
-      startY: pageY,
-      currentY: pageY,
-      offsetY: pageY - rect.top,
-      height
-    };
+    const oldIndex = this.items.indexOf(this.draggedItem);
+    let newIndex = this.items.indexOf(targetItem);
 
-    element.style.width = `${rect.width}px`;
-    element.style.height = `${rect.height}px`;
-    element.style.position = 'fixed';
-    element.style.zIndex = '1000';
-    element.style.left = `${rect.left}px`;
-    element.style.top = `${rect.top}px`;
-  }
-
-  private readonly onMouseMove = (event: MouseEvent): void => {
-    if (!this.dragState) return;
-    this.updateDragPosition(event.pageY);
-  };
-
-  private readonly onTouchMove = (event: TouchEvent): void => {
-    if (!this.dragState) return;
-    this.updateDragPosition(event.touches[0].pageY);
-  };
-
-  private readonly onDragEnd = (): void => {
-    document.removeEventListener('mousemove', this.onMouseMove);
-    document.removeEventListener('mouseup', this.onDragEnd);
-    document.removeEventListener('touchmove', this.onTouchMove);
-    document.removeEventListener('touchend', this.onDragEnd);
-
-    if (!this.dragState) return;
-
-    const oldIndex = this.dragState.index;
-    const newIndex = this.getNewIndex();
-
-    if (oldIndex !== newIndex) {
-      const newItems = [...this.items];
-      const [item] = newItems.splice(oldIndex, 1);
-      newItems.splice(newIndex, 0, item);
-      
-      this.items = newItems;
-      this.itemsChange.emit(this.items);
-      this.orderChange.emit({ oldIndex, newIndex });
+    if (this.dragPosition === 'below') {
+      newIndex++;
     }
 
-    this.resetDragState();
-  };
+    // Reorder items
+    this.items = [
+      ...this.items.slice(0, oldIndex),
+      ...this.items.slice(oldIndex + 1)
+    ];
+    this.items = [
+      ...this.items.slice(0, newIndex),
+      this.draggedItem,
+      ...this.items.slice(newIndex)
+    ];
 
-  private updateDragPosition(pageY: number): void {
-    if (!this.dragState) return;
-
-    this.dragState.currentY = pageY;
-    const deltaY = pageY - this.dragState.startY;
-    
-    this.dragState.element.style.transform = `translateY(${deltaY}px)`;
-    
-    const newIndex = this.getNewIndex();
-    if (newIndex !== this.dragState.index) {
-      this.dragState.index = newIndex;
-    }
-  }
-
-  private getNewIndex(): number {
-    if (!this.dragState) return -1;
-
-    const containerRect = this.container.nativeElement.getBoundingClientRect();
-    const currentY = this.dragState.currentY - containerRect.top - this.dragState.offsetY;
-    
-    const items = Array.from(this.container.nativeElement.children);
-    let closestIndex = this.dragState.index;
-    let closestDistance = Infinity;
-
-    items.forEach((item, index) => {
-      if (index === this.dragState?.index) return;
-
-      const rect = item.getBoundingClientRect();
-      const itemMiddle = rect.top + rect.height / 2 - containerRect.top;
-      const distance = Math.abs(currentY - itemMiddle);
-
-      if (distance < closestDistance) {
-        closestDistance = distance;
-        closestIndex = index;
-      }
-    });
-
-    return closestIndex;
-  }
-
-  private resetDragState(): void {
-    if (!this.dragState) return;
-
-    this.dragState.element.style.removeProperty('width');
-    this.dragState.element.style.removeProperty('height');
-    this.dragState.element.style.removeProperty('position');
-    this.dragState.element.style.removeProperty('z-index');
-    this.dragState.element.style.removeProperty('left');
-    this.dragState.element.style.removeProperty('top');
-    this.dragState.element.style.removeProperty('transform');
-
-    this.isDragging = false;
-    this.dragState = undefined;
-  }
-
-  private getItemElement(index: number): HTMLElement | null {
-    return this.container.nativeElement.children[index] as HTMLElement;
-  }
-
-  getItemTransform(index: number): string {
-    if (!this.isDragging || !this.dragState) return '';
-    
-    const dragIndex = this.dragState.index;
-    if (index === dragIndex) return '';
-
-    if (
-      (index > dragIndex && index <= this.getNewIndex()) ||
-      (index < dragIndex && index >= this.getNewIndex())
-    ) {
-      const direction = index > dragIndex ? -1 : 1;
-      return `translateY(${direction * this.dragState.height}px)`;
-    }
-
-    return '';
-  }
-
-  // Helper method to move item
-  moveItem(fromIndex: number, toIndex: number): void {
-    const newItems = [...this.items];
-    const [item] = newItems.splice(fromIndex, 1);
-    newItems.splice(toIndex, 0, item);
-    
-    this.items = newItems;
     this.itemsChange.emit(this.items);
-    this.orderChange.emit({ oldIndex: fromIndex, newIndex: toIndex });
+    this.orderChanged.emit({ oldIndex, newIndex });
+    this.draggedItem = null;
+    this.dragOverItem = null;
   }
 
-  // Helper method to add item
-  addItem(item: any, index?: number): void {
-    const newItems = [...this.items];
-    if (index === undefined) {
-      newItems.push(item);
-    } else {
-      newItems.splice(index, 0, item);
-    }
-    
-    this.items = newItems;
-    this.itemsChange.emit(this.items);
+  // Helper method to move item up
+  moveItemUp(index: number): void {
+    if (index <= 0) return;
+    this.swapItems(index, index - 1);
   }
 
-  // Helper method to remove item
-  removeItem(index: number): void {
-    const newItems = [...this.items];
-    newItems.splice(index, 1);
-    
-    this.items = newItems;
-    this.itemsChange.emit(this.items);
+  // Helper method to move item down
+  moveItemDown(index: number): void {
+    if (index >= this.items.length - 1) return;
+    this.swapItems(index, index + 1);
+  }
+
+  // Helper method to move item to top
+  moveItemToTop(index: number): void {
+    if (index <= 0) return;
+    const item = this.items[index];
+    this.items.splice(index, 1);
+    this.items.unshift(item);
+    this.emitChanges(index, 0);
+  }
+
+  // Helper method to move item to bottom
+  moveItemToBottom(index: number): void {
+    if (index >= this.items.length - 1) return;
+    const item = this.items[index];
+    this.items.splice(index, 1);
+    this.items.push(item);
+    this.emitChanges(index, this.items.length - 1);
   }
 
   // Helper method to swap items
-  swapItems(index1: number, index2: number): void {
-    const newItems = [...this.items];
-    [newItems[index1], newItems[index2]] = [newItems[index2], newItems[index1]];
-    
-    this.items = newItems;
+  private swapItems(index1: number, index2: number): void {
+    [this.items[index1], this.items[index2]] = [this.items[index2], this.items[index1]];
+    this.emitChanges(index1, index2);
+  }
+
+  // Helper method to emit changes
+  private emitChanges(oldIndex: number, newIndex: number): void {
     this.itemsChange.emit(this.items);
-    this.orderChange.emit({ oldIndex: index1, newIndex: index2 });
+    this.orderChanged.emit({ oldIndex, newIndex });
   }
 
-  // Helper method to check if item can be moved
-  canMove(fromIndex: number, toIndex: number): boolean {
-    return fromIndex >= 0 && fromIndex < this.items.length &&
-           toIndex >= 0 && toIndex < this.items.length &&
-           fromIndex !== toIndex;
+  // Helper method to check if item can move up
+  canMoveUp(index: number): boolean {
+    return index > 0 && !this.disabled && !this.items[index].disabled;
   }
 
-  // Helper method to get item position
-  getItemPosition(item: any): number {
-    return this.items.findIndex(i => this.trackBy(i) === this.trackBy(item));
+  // Helper method to check if item can move down
+  canMoveDown(index: number): boolean {
+    return index < this.items.length - 1 && !this.disabled && !this.items[index].disabled;
   }
 
-  // Helper method to clear list
-  clear(): void {
-    this.items = [];
-    this.itemsChange.emit(this.items);
+  // Helper method to get item index
+  getItemIndex(item: SortableItem): number {
+    return this.items.indexOf(item);
+  }
+
+  // Helper method to check if item is first
+  isFirstItem(item: SortableItem): boolean {
+    return this.items.indexOf(item) === 0;
+  }
+
+  // Helper method to check if item is last
+  isLastItem(item: SortableItem): boolean {
+    return this.items.indexOf(item) === this.items.length - 1;
   }
 }
