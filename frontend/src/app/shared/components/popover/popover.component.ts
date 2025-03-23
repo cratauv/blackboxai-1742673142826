@@ -1,55 +1,50 @@
-import { Component, Input, ElementRef, HostListener } from '@angular/core';
+import { Component, Input, ElementRef, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { animate, style, transition, trigger } from '@angular/animations';
 
 type PopoverPosition = 'top' | 'right' | 'bottom' | 'left';
-type PopoverTrigger = 'hover' | 'click';
-type PopoverSize = 'sm' | 'md' | 'lg';
+type PopoverTrigger = 'hover' | 'click' | 'focus';
 
 @Component({
   selector: 'app-popover',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="relative inline-block">
+    <div
+      class="relative inline-block"
+      #container
+      (mouseenter)="onTrigger('hover', true)"
+      (mouseleave)="onTrigger('hover', false)"
+      (click)="onTrigger('click')"
+      (focus)="onTrigger('focus', true)"
+      (blur)="onTrigger('focus', false)"
+    >
       <!-- Trigger Element -->
-      <div
-        #trigger
-        (mouseenter)="onTriggerHover(true)"
-        (mouseleave)="onTriggerHover(false)"
-        (click)="onTriggerClick()"
-        [class.cursor-pointer]="trigger === 'click'"
-      >
-        <ng-content select="[popoverTrigger]"></ng-content>
+      <div [class.cursor-pointer]="trigger === 'click'">
+        <ng-content></ng-content>
       </div>
 
-      <!-- Popover Content -->
+      <!-- Popover -->
       @if (isVisible) {
         <div
-          #content
+          #popover
           class="absolute z-50"
           [class]="getPositionClasses()"
-          (mouseenter)="onContentHover(true)"
-          (mouseleave)="onContentHover(false)"
-          [@popoverAnimation]
           role="tooltip"
         >
           <!-- Arrow -->
-          @if (showArrow) {
-            <div
-              class="absolute w-2 h-2 transform rotate-45"
-              [class]="getArrowClasses()"
-            ></div>
-          }
-
-          <!-- Content Container -->
           <div
-            class="relative rounded-lg shadow-lg ring-1 ring-black ring-opacity-5"
-            [class]="getContentContainerClasses()"
+            class="absolute w-2 h-2 bg-white transform rotate-45"
+            [class]="getArrowClasses()"
+          ></div>
+
+          <!-- Content -->
+          <div
+            class="relative bg-white rounded-lg shadow-lg overflow-hidden"
+            [class]="getContentClasses()"
           >
             <!-- Header -->
             @if (title) {
-              <div class="p-3 border-b">
+              <div class="px-4 py-3 border-b">
                 <h3 class="text-sm font-medium text-gray-900">
                   {{ title }}
                 </h3>
@@ -58,132 +53,77 @@ type PopoverSize = 'sm' | 'md' | 'lg';
 
             <!-- Body -->
             <div [class]="getBodyClasses()">
-              <ng-content select="[popoverContent]"></ng-content>
+              @if (hasCustomTemplate) {
+                <ng-container [ngTemplateOutlet]="content"></ng-container>
+              } @else {
+                {{ content }}
+              }
             </div>
-
-            <!-- Footer -->
-            @if (showFooter) {
-              <div class="p-3 border-t bg-gray-50">
-                <ng-content select="[popoverFooter]"></ng-content>
-              </div>
-            }
           </div>
         </div>
       }
     </div>
-  `,
-  animations: [
-    trigger('popoverAnimation', [
-      transition(':enter', [
-        style({ opacity: 0, transform: 'scale(0.95)' }),
-        animate('150ms ease-out', style({ opacity: 1, transform: 'scale(1)' }))
-      ]),
-      transition(':leave', [
-        animate('100ms ease-in', style({ opacity: 0, transform: 'scale(0.95)' }))
-      ])
-    ])
-  ]
+  `
 })
-export class PopoverComponent {
-  @Input() position: PopoverPosition = 'bottom';
-  @Input() trigger: PopoverTrigger = 'hover';
-  @Input() size: PopoverSize = 'md';
+export class PopoverComponent implements AfterViewInit {
+  @ViewChild('container') container!: ElementRef<HTMLElement>;
+  @ViewChild('popover') popover!: ElementRef<HTMLElement>;
+
+  @Input() content: any;
   @Input() title = '';
-  @Input() showArrow = true;
-  @Input() showFooter = false;
-  @Input() closeOnClickOutside = true;
+  @Input() position: PopoverPosition = 'top';
+  @Input() trigger: PopoverTrigger = 'hover';
   @Input() offset = 8;
+  @Input() width = 'auto';
+  @Input() interactive = false;
+  @Input() arrow = true;
+  @Input() delay = 0;
 
   isVisible = false;
-  isHoveringTrigger = false;
-  isHoveringContent = false;
+  hasCustomTemplate = false;
+  private showTimeout?: number;
+  private hideTimeout?: number;
 
-  constructor(private elementRef: ElementRef) {}
-
-  @HostListener('document:click', ['$event'])
-  onDocumentClick(event: MouseEvent): void {
-    if (!this.closeOnClickOutside) return;
-    
-    const clickedInside = this.elementRef.nativeElement.contains(event.target);
-    if (!clickedInside && this.trigger === 'click') {
-      this.hide();
-    }
+  ngAfterViewInit(): void {
+    this.hasCustomTemplate = this.content?.['_declarationTContainer'] !== undefined;
   }
 
-  @HostListener('window:scroll')
-  @HostListener('window:resize')
-  onWindowChange(): void {
-    if (this.isVisible) {
-      this.updatePosition();
-    }
-  }
+  onTrigger(triggerType: PopoverTrigger, isShow = true): void {
+    if (this.trigger !== triggerType) return;
 
-  onTriggerHover(isHovering: boolean): void {
-    this.isHoveringTrigger = isHovering;
-    if (this.trigger === 'hover') {
-      setTimeout(() => {
-        this.updateVisibility();
-      }, 100);
-    }
-  }
-
-  onContentHover(isHovering: boolean): void {
-    this.isHoveringContent = isHovering;
-    if (this.trigger === 'hover') {
-      setTimeout(() => {
-        this.updateVisibility();
-      }, 100);
-    }
-  }
-
-  onTriggerClick(): void {
-    if (this.trigger === 'click') {
+    if (triggerType === 'click') {
       this.toggle();
+    } else {
+      if (isShow) {
+        this.show();
+      } else {
+        this.hide();
+      }
     }
-  }
-
-  getPositionClasses(): string {
-    const positions = {
-      top: '-top-2 left-1/2 transform -translate-x-1/2 -translate-y-full',
-      right: 'top-1/2 -right-2 transform translate-x-full -translate-y-1/2',
-      bottom: '-bottom-2 left-1/2 transform -translate-x-1/2 translate-y-full',
-      left: 'top-1/2 -left-2 transform -translate-x-full -translate-y-1/2'
-    };
-    return `${positions[this.position]} mt-${this.offset}`;
-  }
-
-  getArrowClasses(): string {
-    const positions = {
-      top: 'bottom-[-4px] left-1/2 -translate-x-1/2',
-      right: 'left-[-4px] top-1/2 -translate-y-1/2',
-      bottom: 'top-[-4px] left-1/2 -translate-x-1/2',
-      left: 'right-[-4px] top-1/2 -translate-y-1/2'
-    };
-    return `${positions[this.position]} bg-white`;
-  }
-
-  getContentContainerClasses(): string {
-    const sizes = {
-      sm: 'w-48',
-      md: 'w-64',
-      lg: 'w-80'
-    };
-    return `${sizes[this.size]} bg-white`;
-  }
-
-  getBodyClasses(): string {
-    return this.title || this.showFooter ? 'p-3' : 'p-4';
   }
 
   show(): void {
-    this.isVisible = true;
-    setTimeout(() => {
+    this.clearTimeouts();
+    if (this.delay > 0) {
+      this.showTimeout = window.setTimeout(() => {
+        this.isVisible = true;
+        this.updatePosition();
+      }, this.delay);
+    } else {
+      this.isVisible = true;
       this.updatePosition();
-    });
+    }
   }
 
   hide(): void {
-    this.isVisible = false;
+    this.clearTimeouts();
+    if (this.delay > 0) {
+      this.hideTimeout = window.setTimeout(() => {
+        this.isVisible = false;
+      }, this.delay);
+    } else {
+      this.isVisible = false;
+    }
   }
 
   toggle(): void {
@@ -194,50 +134,153 @@ export class PopoverComponent {
     }
   }
 
-  private updateVisibility(): void {
-    this.isVisible = this.isHoveringTrigger || this.isHoveringContent;
-  }
-
   private updatePosition(): void {
-    // Implementation would go here to handle dynamic positioning
-    // based on viewport boundaries and scroll position
+    if (!this.popover || !this.container) return;
+
+    const triggerRect = this.container.nativeElement.getBoundingClientRect();
+    const popoverRect = this.popover.nativeElement.getBoundingClientRect();
+
+    let top = 0;
+    let left = 0;
+
+    switch (this.position) {
+      case 'top':
+        top = -popoverRect.height - this.offset;
+        left = (triggerRect.width - popoverRect.width) / 2;
+        break;
+      case 'right':
+        top = (triggerRect.height - popoverRect.height) / 2;
+        left = triggerRect.width + this.offset;
+        break;
+      case 'bottom':
+        top = triggerRect.height + this.offset;
+        left = (triggerRect.width - popoverRect.width) / 2;
+        break;
+      case 'left':
+        top = (triggerRect.height - popoverRect.height) / 2;
+        left = -popoverRect.width - this.offset;
+        break;
+    }
+
+    this.popover.nativeElement.style.transform = `translate(${left}px, ${top}px)`;
   }
 
-  // Helper method to get content width
-  getContentWidth(): string {
-    const widths = {
-      sm: '12rem',
-      md: '16rem',
-      lg: '20rem'
+  private clearTimeouts(): void {
+    if (this.showTimeout) {
+      clearTimeout(this.showTimeout);
+      this.showTimeout = undefined;
+    }
+    if (this.hideTimeout) {
+      clearTimeout(this.hideTimeout);
+      this.hideTimeout = undefined;
+    }
+  }
+
+  getPositionClasses(): string {
+    const positions = {
+      top: 'bottom-full mb-2',
+      right: 'left-full ml-2',
+      bottom: 'top-full mt-2',
+      left: 'right-full mr-2'
     };
-    return widths[this.size];
+    return positions[this.position];
   }
 
-  // Helper method to get animation duration
-  getAnimationDuration(): number {
-    return 150; // milliseconds
-  }
+  getArrowClasses(): string {
+    if (!this.arrow) return 'hidden';
 
-  // Helper method to get z-index
-  getZIndex(): number {
-    return 50;
-  }
-
-  // Helper method to check if popover fits in viewport
-  checkViewportFit(): PopoverPosition {
-    // Implementation would go here to determine the best position
-    // based on available space in the viewport
-    return this.position;
-  }
-
-  // Helper method to get offset based on position
-  getPositionOffset(): { x: number; y: number } {
-    const offsets = {
-      top: { x: 0, y: -this.offset },
-      right: { x: this.offset, y: 0 },
-      bottom: { x: 0, y: this.offset },
-      left: { x: -this.offset, y: 0 }
+    const positions = {
+      top: '-bottom-1 left-1/2 -translate-x-1/2',
+      right: '-left-1 top-1/2 -translate-y-1/2',
+      bottom: '-top-1 left-1/2 -translate-x-1/2',
+      left: '-right-1 top-1/2 -translate-y-1/2'
     };
-    return offsets[this.position];
+    return positions[this.position];
+  }
+
+  getContentClasses(): string {
+    return `
+      ${this.interactive ? 'pointer-events-auto' : 'pointer-events-none'}
+      ${this.width !== 'auto' ? `w-${this.width}` : ''}
+    `;
+  }
+
+  getBodyClasses(): string {
+    return `
+      px-4 py-3
+      ${this.hasCustomTemplate ? '' : 'text-sm text-gray-700'}
+    `;
+  }
+
+  // Helper method to set content
+  setContent(content: any): void {
+    this.content = content;
+    this.hasCustomTemplate = content?.['_declarationTContainer'] !== undefined;
+  }
+
+  // Helper method to set position
+  setPosition(position: PopoverPosition): void {
+    this.position = position;
+    if (this.isVisible) {
+      this.updatePosition();
+    }
+  }
+
+  // Helper method to set trigger
+  setTrigger(trigger: PopoverTrigger): void {
+    this.trigger = trigger;
+  }
+
+  // Helper method to set offset
+  setOffset(offset: number): void {
+    this.offset = offset;
+    if (this.isVisible) {
+      this.updatePosition();
+    }
+  }
+
+  // Helper method to set width
+  setWidth(width: string): void {
+    this.width = width;
+  }
+
+  // Helper method to toggle interactive mode
+  toggleInteractive(interactive: boolean): void {
+    this.interactive = interactive;
+  }
+
+  // Helper method to toggle arrow
+  toggleArrow(arrow: boolean): void {
+    this.arrow = arrow;
+  }
+
+  // Helper method to set delay
+  setDelay(delay: number): void {
+    this.delay = delay;
+  }
+
+  // Helper method to check if popover is visible
+  isShown(): boolean {
+    return this.isVisible;
+  }
+
+  // Helper method to get dimensions
+  getDimensions(): { width: number; height: number } {
+    return this.popover?.nativeElement.getBoundingClientRect() || { width: 0, height: 0 };
+  }
+
+  // Helper method to get trigger dimensions
+  getTriggerDimensions(): { width: number; height: number } {
+    return this.container?.nativeElement.getBoundingClientRect() || { width: 0, height: 0 };
+  }
+
+  // Helper method to check if has title
+  hasTitle(): boolean {
+    return !!this.title;
+  }
+
+  // Helper method to check if has custom template
+  hasCustomContent(): boolean {
+    return this.hasCustomTemplate;
   }
 }
