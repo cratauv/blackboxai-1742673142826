@@ -1,171 +1,289 @@
-import { Component, Input, ElementRef, OnDestroy } from '@angular/core';
+import { Component, Input, ElementRef, ViewChild, AfterViewInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { animate, style, transition, trigger } from '@angular/animations';
 
 type TooltipPosition = 'top' | 'right' | 'bottom' | 'left';
-type TooltipTheme = 'dark' | 'light';
+type TooltipTrigger = 'hover' | 'click' | 'focus';
 
 @Component({
   selector: 'app-tooltip',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="inline-block relative" (mouseenter)="show()" (mouseleave)="hide()">
-      <!-- Content that triggers the tooltip -->
+    <div
+      class="relative inline-block"
+      #container
+      (mouseenter)="onTrigger('hover', true)"
+      (mouseleave)="onTrigger('hover', false)"
+      (click)="onTrigger('click')"
+      (focus)="onTrigger('focus', true)"
+      (blur)="onTrigger('focus', false)"
+    >
+      <!-- Content -->
       <ng-content></ng-content>
 
       <!-- Tooltip -->
       @if (isVisible) {
         <div
-          class="absolute z-50 px-2 py-1 text-sm whitespace-nowrap"
-          [class]="getPositionClasses()"
-          [@tooltipAnimation]
+          #tooltip
           role="tooltip"
+          class="absolute z-50 px-2 py-1 text-sm font-medium text-white bg-gray-900 rounded shadow-sm max-w-xs"
+          [class.invisible]="!isVisible"
+          [style.width]="width"
+          [attr.data-position]="position"
         >
           <!-- Arrow -->
           <div
-            class="absolute w-2 h-2 transform rotate-45"
+            class="absolute w-2 h-2 bg-gray-900 transform rotate-45"
             [class]="getArrowClasses()"
           ></div>
 
           <!-- Content -->
-          <div
-            class="relative rounded px-2 py-1"
-            [class]="getThemeClasses()"
-          >
-            {{ content }}
+          <div class="relative z-10">
+            @if (hasCustomTemplate) {
+              <ng-container [ngTemplateOutlet]="content"></ng-container>
+            } @else {
+              {{ content }}
+            }
           </div>
         </div>
       }
     </div>
   `,
-  animations: [
-    trigger('tooltipAnimation', [
-      transition(':enter', [
-        style({ opacity: 0, transform: 'scale(0.9)' }),
-        animate('150ms ease-out', style({ opacity: 1, transform: 'scale(1)' }))
-      ]),
-      transition(':leave', [
-        animate('100ms ease-in', style({ opacity: 0, transform: 'scale(0.9)' }))
-      ])
-    ])
-  ],
   styles: [`
     :host {
       display: inline-block;
     }
+
+    [data-position='top'] {
+      bottom: calc(100% + 5px);
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    [data-position='right'] {
+      left: calc(100% + 5px);
+      top: 50%;
+      transform: translateY(-50%);
+    }
+
+    [data-position='bottom'] {
+      top: calc(100% + 5px);
+      left: 50%;
+      transform: translateX(-50%);
+    }
+
+    [data-position='left'] {
+      right: calc(100% + 5px);
+      top: 50%;
+      transform: translateY(-50%);
+    }
   `]
 })
-export class TooltipComponent implements OnDestroy {
-  @Input() content = '';
+export class TooltipComponent implements AfterViewInit {
+  @ViewChild('container') container!: ElementRef<HTMLElement>;
+  @ViewChild('tooltip') tooltip!: ElementRef<HTMLElement>;
+
+  @Input() content: any;
   @Input() position: TooltipPosition = 'top';
-  @Input() theme: TooltipTheme = 'dark';
-  @Input() delay = 200;
-  @Input() maxWidth = '200px';
-  @Input() showArrow = true;
+  @Input() trigger: TooltipTrigger = 'hover';
+  @Input() delay = 0;
+  @Input() width = 'auto';
+  @Input() disabled = false;
+  @Input() interactive = false;
 
   isVisible = false;
-  private timeoutId?: number;
+  hasCustomTemplate = false;
+  private showTimeout?: number;
+  private hideTimeout?: number;
 
-  constructor(private elementRef: ElementRef) {}
-
-  ngOnDestroy(): void {
-    this.clearTimeout();
+  ngAfterViewInit(): void {
+    this.hasCustomTemplate = this.content?.['_declarationTContainer'] !== undefined;
+    this.setupEventListeners();
   }
 
-  show(): void {
-    this.clearTimeout();
-    this.timeoutId = window.setTimeout(() => {
-      this.isVisible = true;
-    }, this.delay);
-  }
+  private setupEventListeners(): void {
+    if (this.interactive && this.tooltip) {
+      this.tooltip.nativeElement.addEventListener('mouseenter', () => {
+        if (this.trigger === 'hover') {
+          this.clearHideTimeout();
+        }
+      });
 
-  hide(): void {
-    this.clearTimeout();
-    this.isVisible = false;
-  }
+      this.tooltip.nativeElement.addEventListener('mouseleave', () => {
+        if (this.trigger === 'hover') {
+          this.hide();
+        }
+      });
+    }
 
-  private clearTimeout(): void {
-    if (this.timeoutId) {
-      window.clearTimeout(this.timeoutId);
-      this.timeoutId = undefined;
+    // Handle click outside for click trigger
+    if (this.trigger === 'click') {
+      document.addEventListener('click', this.handleClickOutside.bind(this));
     }
   }
 
-  getPositionClasses(): string {
-    const positions: Record<TooltipPosition, string> = {
-      top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
-      right: 'left-full top-1/2 -translate-y-1/2 ml-2',
-      bottom: 'top-full left-1/2 -translate-x-1/2 mt-2',
-      left: 'right-full top-1/2 -translate-y-1/2 mr-2'
-    };
+  private handleClickOutside(event: MouseEvent): void {
+    if (!this.container.nativeElement.contains(event.target as Node)) {
+      this.hide();
+    }
+  }
 
-    return positions[this.position];
+  onTrigger(triggerType: TooltipTrigger, isShow = true): void {
+    if (this.disabled || this.trigger !== triggerType) return;
+
+    if (triggerType === 'click') {
+      this.toggle();
+    } else {
+      if (isShow) {
+        this.show();
+      } else {
+        this.hide();
+      }
+    }
+  }
+
+  show(): void {
+    this.clearTimeouts();
+    if (this.delay > 0) {
+      this.showTimeout = window.setTimeout(() => {
+        this.isVisible = true;
+        this.updatePosition();
+      }, this.delay);
+    } else {
+      this.isVisible = true;
+      this.updatePosition();
+    }
+  }
+
+  hide(): void {
+    this.clearTimeouts();
+    if (this.delay > 0) {
+      this.hideTimeout = window.setTimeout(() => {
+        this.isVisible = false;
+      }, this.delay);
+    } else {
+      this.isVisible = false;
+    }
+  }
+
+  toggle(): void {
+    if (this.isVisible) {
+      this.hide();
+    } else {
+      this.show();
+    }
+  }
+
+  private updatePosition(): void {
+    if (!this.tooltip) return;
+
+    const tooltipEl = this.tooltip.nativeElement;
+    const containerRect = this.container.nativeElement.getBoundingClientRect();
+    const tooltipRect = tooltipEl.getBoundingClientRect();
+
+    // Check if tooltip is outside viewport
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let newPosition = this.position;
+
+    // Flip position if needed
+    if (this.position === 'top' && containerRect.top - tooltipRect.height < 0) {
+      newPosition = 'bottom';
+    } else if (this.position === 'bottom' && containerRect.bottom + tooltipRect.height > viewportHeight) {
+      newPosition = 'top';
+    } else if (this.position === 'left' && containerRect.left - tooltipRect.width < 0) {
+      newPosition = 'right';
+    } else if (this.position === 'right' && containerRect.right + tooltipRect.width > viewportWidth) {
+      newPosition = 'left';
+    }
+
+    tooltipEl.setAttribute('data-position', newPosition);
   }
 
   getArrowClasses(): string {
-    if (!this.showArrow) return 'hidden';
-
-    const arrowPositions: Record<TooltipPosition, string> = {
+    const positions = {
       top: 'bottom-[-4px] left-1/2 -translate-x-1/2',
       right: 'left-[-4px] top-1/2 -translate-y-1/2',
       bottom: 'top-[-4px] left-1/2 -translate-x-1/2',
       left: 'right-[-4px] top-1/2 -translate-y-1/2'
     };
-
-    const themeClasses = this.theme === 'dark' 
-      ? 'bg-gray-800'
-      : 'bg-white border-gray-200';
-
-    return `${arrowPositions[this.position]} ${themeClasses}`;
+    return positions[this.position];
   }
 
-  getThemeClasses(): string {
-    const themes: Record<TooltipTheme, string> = {
-      dark: 'bg-gray-800 text-white',
-      light: 'bg-white text-gray-900 border border-gray-200 shadow-sm'
-    };
-
-    return themes[this.theme];
+  private clearTimeouts(): void {
+    this.clearShowTimeout();
+    this.clearHideTimeout();
   }
 
-  // Helper method to check if tooltip should be shown
-  shouldShow(): boolean {
-    return !!this.content && this.isVisible;
+  private clearShowTimeout(): void {
+    if (this.showTimeout) {
+      clearTimeout(this.showTimeout);
+      this.showTimeout = undefined;
+    }
   }
 
-  // Helper method to get computed position
-  getComputedPosition(): { top: string; left: string } {
-    const element = this.elementRef.nativeElement;
-    const rect = element.getBoundingClientRect();
-    const scrollLeft = window.pageXOffset || document.documentElement.scrollLeft;
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-
-    return {
-      top: `${rect.top + scrollTop}px`,
-      left: `${rect.left + scrollLeft}px`
-    };
+  private clearHideTimeout(): void {
+    if (this.hideTimeout) {
+      clearTimeout(this.hideTimeout);
+      this.hideTimeout = undefined;
+    }
   }
 
-  // Helper method to check if tooltip fits in viewport
-  checkViewportFit(): TooltipPosition {
-    const element = this.elementRef.nativeElement;
-    const rect = element.getBoundingClientRect();
-    const viewportWidth = window.innerWidth;
-    const viewportHeight = window.innerHeight;
+  // Helper method to set content
+  setContent(content: any): void {
+    this.content = content;
+    this.hasCustomTemplate = content?.['_declarationTContainer'] !== undefined;
+  }
 
-    // Check if default position fits, otherwise return alternative position
-    switch (this.position) {
-      case 'top':
-        return rect.top < 50 ? 'bottom' : 'top';
-      case 'right':
-        return rect.right + 50 > viewportWidth ? 'left' : 'right';
-      case 'bottom':
-        return rect.bottom + 50 > viewportHeight ? 'top' : 'bottom';
-      case 'left':
-        return rect.left < 50 ? 'right' : 'left';
-      default:
-        return this.position;
+  // Helper method to set position
+  setPosition(position: TooltipPosition): void {
+    this.position = position;
+    if (this.isVisible) {
+      this.updatePosition();
+    }
+  }
+
+  // Helper method to set trigger
+  setTrigger(trigger: TooltipTrigger): void {
+    this.trigger = trigger;
+  }
+
+  // Helper method to check if tooltip is visible
+  isShown(): boolean {
+    return this.isVisible;
+  }
+
+  // Helper method to force update position
+  updateTooltipPosition(): void {
+    if (this.isVisible) {
+      this.updatePosition();
+    }
+  }
+
+  // Helper method to enable/disable tooltip
+  setDisabled(disabled: boolean): void {
+    this.disabled = disabled;
+    if (disabled && this.isVisible) {
+      this.hide();
+    }
+  }
+
+  // Helper method to set delay
+  setDelay(delay: number): void {
+    this.delay = delay;
+  }
+
+  // Helper method to set width
+  setWidth(width: string): void {
+    this.width = width;
+  }
+
+  // Helper method to set interactivity
+  setInteractive(interactive: boolean): void {
+    this.interactive = interactive;
+    if (this.tooltip) {
+      this.setupEventListeners();
     }
   }
 }
