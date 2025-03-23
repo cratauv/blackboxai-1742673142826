@@ -1,157 +1,237 @@
 import { Component, Input, Output, EventEmitter } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { RouterModule } from '@angular/router';
 
-export interface Tab {
+export interface TabItem {
   id: string;
   label: string;
   icon?: string;
-  badge?: number;
+  badge?: string | number;
   disabled?: boolean;
+  routerLink?: string;
 }
 
 @Component({
   selector: 'app-tabs',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule],
   template: `
-    <div class="border-b border-gray-200">
+    <div>
       <!-- Tab List -->
-      <nav class="flex -mb-px space-x-8" role="tablist">
-        @for (tab of tabs; track tab.id) {
-          <button
-            role="tab"
-            [id]="'tab-' + tab.id"
-            [attr.aria-selected]="activeTab === tab.id"
-            [attr.aria-controls]="'panel-' + tab.id"
-            [disabled]="tab.disabled"
-            (click)="selectTab(tab.id)"
-            class="group relative min-w-0 flex-1 overflow-hidden py-4 px-1 text-center text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-            [class.text-primary-600]="activeTab === tab.id"
-            [class.border-primary-500]="activeTab === tab.id"
-            [class.text-gray-500]="activeTab !== tab.id && !tab.disabled"
-            [class.hover:text-gray-700]="activeTab !== tab.id && !tab.disabled"
-            [class.text-gray-400]="tab.disabled"
-            [class.cursor-not-allowed]="tab.disabled"
-          >
-            <div class="flex items-center justify-center">
-              <!-- Icon -->
+      <div class="border-b border-gray-200">
+        <nav
+          class="-mb-px flex space-x-8"
+          [class.overflow-x-auto]="scrollable"
+          aria-label="Tabs"
+        >
+          @for (tab of tabs; track tab.id) {
+            <a
+              [id]="'tab-' + tab.id"
+              [routerLink]="tab.routerLink"
+              [class]="getTabClasses(tab)"
+              [attr.aria-current]="tab.id === activeTab ? 'page' : undefined"
+              [attr.aria-disabled]="tab.disabled"
+              (click)="onTabClick(tab)"
+            >
               @if (tab.icon) {
-                <i [class]="tab.icon" class="mr-2"></i>
+                <i [class]="tab.icon + ' -ml-0.5 mr-2 h-5 w-5'"></i>
               }
-
-              <!-- Label -->
-              <span>{{ tab.label }}</span>
-
-              <!-- Badge -->
-              @if (tab.badge !== undefined) {
+              {{ tab.label }}
+              @if (tab.badge) {
                 <span
-                  class="ml-2 rounded-full bg-primary-100 px-2.5 py-0.5 text-xs font-medium text-primary-600"
+                  [class]="getBadgeClasses(tab)"
                 >
                   {{ tab.badge }}
                 </span>
               }
-            </div>
-
-            <!-- Active Indicator -->
-            <span
-              class="absolute inset-x-0 bottom-0 h-0.5"
-              [class.bg-primary-500]="activeTab === tab.id"
-              aria-hidden="true"
-            ></span>
-          </button>
-        }
-      </nav>
+            </a>
+          }
+        </nav>
+      </div>
 
       <!-- Tab Panels -->
       <div class="mt-4">
         <ng-content></ng-content>
       </div>
     </div>
-  `
+  `,
+  styles: [`
+    :host {
+      display: block;
+    }
+
+    .overflow-x-auto {
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+    }
+
+    .overflow-x-auto::-webkit-scrollbar {
+      display: none;
+    }
+  `]
 })
 export class TabsComponent {
-  @Input() tabs: Tab[] = [];
+  @Input() tabs: TabItem[] = [];
   @Input() activeTab = '';
+  @Input() variant: 'underline' | 'pills' | 'bordered' = 'underline';
+  @Input() scrollable = false;
+  @Input() size: 'sm' | 'md' | 'lg' = 'md';
+  @Input() fullWidth = false;
+
   @Output() tabChange = new EventEmitter<string>();
 
-  selectTab(tabId: string): void {
-    if (this.isTabDisabled(tabId)) return;
-    
-    this.activeTab = tabId;
-    this.tabChange.emit(tabId);
+  getTabClasses(tab: TabItem): string {
+    const baseClasses = 'group inline-flex items-center font-medium';
+
+    const sizeClasses = {
+      sm: 'px-3 py-2 text-sm',
+      md: 'px-4 py-2.5 text-base',
+      lg: 'px-5 py-3 text-lg'
+    };
+
+    const variantClasses = {
+      underline: this.getUnderlineClasses(tab),
+      pills: this.getPillsClasses(tab),
+      bordered: this.getBorderedClasses(tab)
+    };
+
+    const widthClass = this.fullWidth ? 'flex-1 justify-center' : '';
+    const disabledClass = tab.disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer';
+
+    return `${baseClasses} ${sizeClasses[this.size]} ${variantClasses[this.variant]} ${widthClass} ${disabledClass}`;
   }
 
-  isTabDisabled(tabId: string): boolean {
+  private getUnderlineClasses(tab: TabItem): string {
+    const isActive = tab.id === this.activeTab;
+    return isActive
+      ? 'border-b-2 border-primary-500 text-primary-600'
+      : 'border-b-2 border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700';
+  }
+
+  private getPillsClasses(tab: TabItem): string {
+    const isActive = tab.id === this.activeTab;
+    return isActive
+      ? 'bg-primary-100 text-primary-700'
+      : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50';
+  }
+
+  private getBorderedClasses(tab: TabItem): string {
+    const isActive = tab.id === this.activeTab;
+    return isActive
+      ? 'bg-white border-gray-200 border-b-white text-primary-600'
+      : 'bg-gray-50 border-gray-200 text-gray-500 hover:text-gray-700';
+  }
+
+  getBadgeClasses(tab: TabItem): string {
+    const baseClasses = 'ml-2 px-2 py-0.5 text-xs font-medium rounded-full';
+    const isActive = tab.id === this.activeTab;
+
+    return isActive
+      ? 'bg-primary-100 text-primary-700'
+      : 'bg-gray-100 text-gray-600';
+  }
+
+  onTabClick(tab: TabItem): void {
+    if (!tab.disabled && tab.id !== this.activeTab) {
+      this.activeTab = tab.id;
+      this.tabChange.emit(tab.id);
+    }
+  }
+
+  // Helper method to set active tab
+  setActiveTab(tabId: string): void {
     const tab = this.tabs.find(t => t.id === tabId);
-    return !!tab?.disabled;
-  }
-
-  // Helper method to get tab by ID
-  getTabById(tabId: string): Tab | undefined {
-    return this.tabs.find(tab => tab.id === tabId);
-  }
-
-  // Helper method to get tab index
-  getTabIndex(tabId: string): number {
-    return this.tabs.findIndex(tab => tab.id === tabId);
-  }
-
-  // Helper method to get next enabled tab
-  getNextEnabledTab(currentTabId: string): Tab | undefined {
-    const currentIndex = this.getTabIndex(currentTabId);
-    const nextTabs = this.tabs.slice(currentIndex + 1);
-    return nextTabs.find(tab => !tab.disabled);
-  }
-
-  // Helper method to get previous enabled tab
-  getPreviousEnabledTab(currentTabId: string): Tab | undefined {
-    const currentIndex = this.getTabIndex(currentTabId);
-    const previousTabs = this.tabs.slice(0, currentIndex).reverse();
-    return previousTabs.find(tab => !tab.disabled);
-  }
-
-  // Helper method to select next tab
-  selectNextTab(): void {
-    const nextTab = this.getNextEnabledTab(this.activeTab);
-    if (nextTab) {
-      this.selectTab(nextTab.id);
+    if (tab && !tab.disabled) {
+      this.activeTab = tabId;
+      this.tabChange.emit(tabId);
     }
   }
 
-  // Helper method to select previous tab
-  selectPreviousTab(): void {
-    const previousTab = this.getPreviousEnabledTab(this.activeTab);
-    if (previousTab) {
-      this.selectTab(previousTab.id);
+  // Helper method to add tab
+  addTab(tab: TabItem): void {
+    this.tabs.push(tab);
+  }
+
+  // Helper method to remove tab
+  removeTab(tabId: string): void {
+    const index = this.tabs.findIndex(t => t.id === tabId);
+    if (index !== -1) {
+      this.tabs.splice(index, 1);
+      if (this.activeTab === tabId) {
+        this.activeTab = this.tabs[0]?.id || '';
+      }
     }
   }
 
-  // Helper method to check if tab is active
-  isTabActive(tabId: string): boolean {
-    return this.activeTab === tabId;
+  // Helper method to enable tab
+  enableTab(tabId: string): void {
+    const tab = this.tabs.find(t => t.id === tabId);
+    if (tab) {
+      tab.disabled = false;
+    }
   }
 
-  // Helper method to get active tab data
-  getActiveTabData(): Tab | undefined {
-    return this.getTabById(this.activeTab);
+  // Helper method to disable tab
+  disableTab(tabId: string): void {
+    const tab = this.tabs.find(t => t.id === tabId);
+    if (tab) {
+      tab.disabled = true;
+      if (this.activeTab === tabId) {
+        this.activeTab = this.tabs.find(t => !t.disabled)?.id || '';
+      }
+    }
   }
-}
 
-@Component({
-  selector: 'app-tab-panel',
-  standalone: true,
-  template: `
-    <div
-      role="tabpanel"
-      [id]="'panel-' + tabId"
-      [attr.aria-labelledby]="'tab-' + tabId"
-      [class.hidden]="!active"
-    >
-      <ng-content></ng-content>
-    </div>
-  `
-})
-export class TabPanelComponent {
-  @Input() tabId = '';
-  @Input() active = false;
+  // Helper method to update tab badge
+  updateBadge(tabId: string, badge: string | number): void {
+    const tab = this.tabs.find(t => t.id === tabId);
+    if (tab) {
+      tab.badge = badge;
+    }
+  }
+
+  // Helper method to clear tab badge
+  clearBadge(tabId: string): void {
+    const tab = this.tabs.find(t => t.id === tabId);
+    if (tab) {
+      tab.badge = undefined;
+    }
+  }
+
+  // Helper method to get active tab
+  getActiveTab(): TabItem | undefined {
+    return this.tabs.find(t => t.id === this.activeTab);
+  }
+
+  // Helper method to get next tab
+  getNextTab(): TabItem | undefined {
+    const currentIndex = this.tabs.findIndex(t => t.id === this.activeTab);
+    return this.tabs[currentIndex + 1];
+  }
+
+  // Helper method to get previous tab
+  getPreviousTab(): TabItem | undefined {
+    const currentIndex = this.tabs.findIndex(t => t.id === this.activeTab);
+    return this.tabs[currentIndex - 1];
+  }
+
+  // Helper method to set variant
+  setVariant(variant: 'underline' | 'pills' | 'bordered'): void {
+    this.variant = variant;
+  }
+
+  // Helper method to set size
+  setSize(size: 'sm' | 'md' | 'lg'): void {
+    this.size = size;
+  }
+
+  // Helper method to toggle scrollable
+  toggleScrollable(scrollable: boolean): void {
+    this.scrollable = scrollable;
+  }
+
+  // Helper method to toggle full width
+  toggleFullWidth(fullWidth: boolean): void {
+    this.fullWidth = fullWidth;
+  }
 }
