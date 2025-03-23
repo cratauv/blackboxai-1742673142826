@@ -1,136 +1,239 @@
-import { Component, Input } from '@angular/core';
+import { Component, Input, OnChanges, SimpleChanges } from '@angular/core';
 import { CommonModule } from '@angular/common';
+
+type PriceSize = 'sm' | 'md' | 'lg' | 'xl';
+type PriceColor = 'default' | 'success' | 'error' | 'warning' | 'muted';
 
 @Component({
   selector: 'app-price-display',
   standalone: true,
   imports: [CommonModule],
   template: `
-    <div class="inline-flex items-baseline" [class.line-through]="isStrikethrough">
+    <div class="inline-flex items-baseline" [class]="getContainerClasses()">
       <!-- Currency Symbol -->
-      @if (showCurrencySymbol) {
-        <span 
-          class="text-sm mr-1"
-          [class.text-gray-500]="isSecondary"
-          [class.font-normal]="!isBold"
-        >
-          {{ currencySymbol }}
-        </span>
+      @if (showCurrency && currencyPosition === 'before') {
+        <span [class]="getSymbolClasses()">{{ currencySymbol }}</span>
       }
 
       <!-- Main Price -->
-      <span
-        [class.text-gray-500]="isSecondary"
-        [class.font-bold]="isBold"
-        [class.text-xl]="size === 'lg'"
-        [class.text-base]="size === 'md'"
-        [class.text-sm]="size === 'sm'"
-      >
-        {{ formatPrice(price) }}
+      <span [class]="getMainPriceClasses()">
+        {{ formatMainPrice() }}
       </span>
 
       <!-- Decimal Part -->
-      @if (showDecimals && getDecimalPart(price) !== '00') {
-        <span
-          class="text-sm"
-          [class.text-gray-500]="isSecondary"
-          [class.font-normal]="!isBold"
-        >
-          .{{ getDecimalPart(price) }}
+      @if (showDecimals) {
+        <span [class]="getDecimalClasses()">
+          {{ formatDecimalPart() }}
         </span>
       }
 
-      <!-- Currency Code -->
-      @if (showCurrencyCode) {
-        <span class="ml-1 text-sm text-gray-500">
-          {{ currencyCode }}
+      <!-- Currency Symbol (after) -->
+      @if (showCurrency && currencyPosition === 'after') {
+        <span [class]="getSymbolClasses()">{{ currencySymbol }}</span>
+      }
+
+      <!-- Original Price -->
+      @if (originalPrice !== undefined && originalPrice > price) {
+        <span [class]="getOriginalPriceClasses()">
+          {{ formatOriginalPrice() }}
+        </span>
+      }
+
+      <!-- Discount Badge -->
+      @if (showDiscount && originalPrice !== undefined && originalPrice > price) {
+        <span [class]="getDiscountBadgeClasses()">
+          -{{ calculateDiscount() }}%
         </span>
       }
     </div>
-
-    <!-- Discount Tag -->
-    @if (showDiscount && originalPrice && originalPrice > price) {
-      <div class="inline-flex items-center ml-2">
-        <span 
-          class="text-sm font-medium text-green-600 bg-green-100 px-2 py-0.5 rounded"
-        >
-          Save {{ calculateDiscountPercentage() }}%
-        </span>
-      </div>
-    }
-
-    <!-- Original Price -->
-    @if (showOriginalPrice && originalPrice && originalPrice > price) {
-      <div class="text-sm text-gray-500 line-through mt-1">
-        {{ currencySymbol }}{{ formatPrice(originalPrice) }}
-      </div>
-    }
   `
 })
-export class PriceDisplayComponent {
+export class PriceDisplayComponent implements OnChanges {
   @Input() price = 0;
   @Input() originalPrice?: number;
+  @Input() currency = 'USD';
   @Input() currencySymbol = '$';
-  @Input() currencyCode = 'USD';
-  @Input() size: 'sm' | 'md' | 'lg' = 'md';
-  @Input() showCurrencySymbol = true;
-  @Input() showCurrencyCode = false;
+  @Input() currencyPosition: 'before' | 'after' = 'before';
+  @Input() size: PriceSize = 'md';
+  @Input() color: PriceColor = 'default';
+  @Input() showCurrency = true;
   @Input() showDecimals = true;
   @Input() showDiscount = false;
-  @Input() showOriginalPrice = false;
-  @Input() isStrikethrough = false;
-  @Input() isSecondary = false;
-  @Input() isBold = true;
+  @Input() minimumFractionDigits = 2;
+  @Input() maximumFractionDigits = 2;
+  @Input() locale = 'en-US';
 
-  formatPrice(price: number): string {
-    return Math.floor(price).toString();
+  private formatter: Intl.NumberFormat;
+
+  constructor() {
+    this.initFormatter();
   }
 
-  getDecimalPart(price: number): string {
-    const decimal = Math.round((price % 1) * 100);
-    return decimal.toString().padStart(2, '0');
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['currency'] || changes['minimumFractionDigits'] || 
+        changes['maximumFractionDigits'] || changes['locale']) {
+      this.initFormatter();
+    }
   }
 
-  calculateDiscountPercentage(): number {
-    if (!this.originalPrice || this.originalPrice <= this.price) return 0;
-    const discount = ((this.originalPrice - this.price) / this.originalPrice) * 100;
-    return Math.round(discount);
+  private initFormatter(): void {
+    this.formatter = new Intl.NumberFormat(this.locale, {
+      minimumFractionDigits: this.minimumFractionDigits,
+      maximumFractionDigits: this.maximumFractionDigits
+    });
   }
 
-  // Helper method to format price with locale
-  formatWithLocale(price: number, locale = 'en-US'): string {
-    return new Intl.NumberFormat(locale, {
-      style: 'currency',
-      currency: this.currencyCode,
-      minimumFractionDigits: this.showDecimals ? 2 : 0,
-      maximumFractionDigits: this.showDecimals ? 2 : 0
-    }).format(price);
+  getContainerClasses(): string {
+    return `font-medium ${this.color === 'muted' ? 'text-gray-500' : ''}`;
   }
 
-  // Helper method to check if price is free
-  isFree(): boolean {
-    return this.price === 0;
+  getSymbolClasses(): string {
+    const sizeClasses = {
+      sm: 'text-sm',
+      md: 'text-base',
+      lg: 'text-lg',
+      xl: 'text-xl'
+    };
+
+    return `${sizeClasses[this.size]} mx-0.5`;
   }
 
-  // Helper method to check if price has discount
-  hasDiscount(): boolean {
-    return !!this.originalPrice && this.originalPrice > this.price;
+  getMainPriceClasses(): string {
+    const sizeClasses = {
+      sm: 'text-sm',
+      md: 'text-base',
+      lg: 'text-lg',
+      xl: 'text-2xl'
+    };
+
+    const colorClasses = {
+      default: 'text-gray-900',
+      success: 'text-success-600',
+      error: 'text-error-600',
+      warning: 'text-warning-600',
+      muted: 'text-gray-500'
+    };
+
+    return `${sizeClasses[this.size]} ${colorClasses[this.color]} font-semibold`;
+  }
+
+  getDecimalClasses(): string {
+    const sizeClasses = {
+      sm: 'text-xs',
+      md: 'text-sm',
+      lg: 'text-base',
+      xl: 'text-lg'
+    };
+
+    return `${sizeClasses[this.size]} font-medium`;
+  }
+
+  getOriginalPriceClasses(): string {
+    const sizeClasses = {
+      sm: 'text-xs',
+      md: 'text-sm',
+      lg: 'text-base',
+      xl: 'text-lg'
+    };
+
+    return `${sizeClasses[this.size]} ml-2 text-gray-500 line-through`;
+  }
+
+  getDiscountBadgeClasses(): string {
+    const sizeClasses = {
+      sm: 'text-xs px-1.5 py-0.5',
+      md: 'text-sm px-2 py-0.5',
+      lg: 'text-base px-2.5 py-1',
+      xl: 'text-lg px-3 py-1'
+    };
+
+    return `${sizeClasses[this.size]} ml-2 bg-success-100 text-success-800 rounded-full font-medium`;
+  }
+
+  formatMainPrice(): string {
+    const [wholePart] = this.formatter.format(this.price).split('.');
+    return wholePart;
+  }
+
+  formatDecimalPart(): string {
+    const parts = this.formatter.format(this.price).split('.');
+    return parts.length > 1 ? parts[1] : '00';
+  }
+
+  formatOriginalPrice(): string {
+    return this.originalPrice !== undefined ? this.formatter.format(this.originalPrice) : '';
+  }
+
+  calculateDiscount(): number {
+    if (this.originalPrice === undefined || this.originalPrice <= this.price) {
+      return 0;
+    }
+    return Math.round(((this.originalPrice - this.price) / this.originalPrice) * 100);
+  }
+
+  // Helper method to format full price
+  formatFullPrice(): string {
+    return this.formatter.format(this.price);
+  }
+
+  // Helper method to set price
+  setPrice(price: number, originalPrice?: number): void {
+    this.price = price;
+    this.originalPrice = originalPrice;
+  }
+
+  // Helper method to set currency
+  setCurrency(currency: string, symbol: string): void {
+    this.currency = currency;
+    this.currencySymbol = symbol;
+    this.initFormatter();
+  }
+
+  // Helper method to set locale
+  setLocale(locale: string): void {
+    this.locale = locale;
+    this.initFormatter();
+  }
+
+  // Helper method to set fraction digits
+  setFractionDigits(min: number, max: number): void {
+    this.minimumFractionDigits = min;
+    this.maximumFractionDigits = max;
+    this.initFormatter();
+  }
+
+  // Helper method to toggle currency display
+  toggleCurrency(show: boolean): void {
+    this.showCurrency = show;
+  }
+
+  // Helper method to toggle decimals display
+  toggleDecimals(show: boolean): void {
+    this.showDecimals = show;
+  }
+
+  // Helper method to toggle discount display
+  toggleDiscount(show: boolean): void {
+    this.showDiscount = show;
+  }
+
+  // Helper method to set size
+  setSize(size: PriceSize): void {
+    this.size = size;
+  }
+
+  // Helper method to set color
+  setColor(color: PriceColor): void {
+    this.color = color;
+  }
+
+  // Helper method to check if price is discounted
+  isDiscounted(): boolean {
+    return this.originalPrice !== undefined && this.originalPrice > this.price;
   }
 
   // Helper method to get discount amount
   getDiscountAmount(): number {
-    if (!this.originalPrice) return 0;
-    return this.originalPrice - this.price;
-  }
-
-  // Helper method to format large numbers with K/M suffix
-  formatLargeNumber(price: number): string {
-    if (price >= 1000000) {
-      return `${(price / 1000000).toFixed(1)}M`;
-    }
-    if (price >= 1000) {
-      return `${(price / 1000).toFixed(1)}K`;
-    }
-    return price.toString();
+    return this.originalPrice !== undefined ? this.originalPrice - this.price : 0;
   }
 }
