@@ -1,11 +1,15 @@
-import { Component, Input, forwardRef } from '@angular/core';
+import { Component, Input, Output, EventEmitter, forwardRef } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ControlValueAccessor, NG_VALUE_ACCESSOR, ReactiveFormsModule, FormControl } from '@angular/forms';
+import { ControlValueAccessor, NG_VALUE_ACCESSOR, FormsModule } from '@angular/forms';
+
+type InputType = 'text' | 'password' | 'email' | 'number' | 'tel' | 'url' | 'search' | 'date' | 'time' | 'datetime-local';
+type InputSize = 'sm' | 'md' | 'lg';
+type InputStatus = 'success' | 'error' | 'warning';
 
 @Component({
   selector: 'app-input',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule],
+  imports: [CommonModule, FormsModule],
   providers: [
     {
       provide: NG_VALUE_ACCESSOR,
@@ -14,155 +18,292 @@ import { ControlValueAccessor, NG_VALUE_ACCESSOR, ReactiveFormsModule, FormContr
     }
   ],
   template: `
-    <div class="form-group">
+    <div [class]="wrapperClasses">
       <!-- Label -->
       @if (label) {
-        <label 
-          [for]="id" 
-          class="block text-sm font-medium text-gray-700 mb-1"
+        <label
+          [for]="id"
+          class="block text-sm font-medium mb-1"
+          [class.text-gray-700]="!status"
+          [class.text-error-700]="status === 'error'"
+          [class.text-success-700]="status === 'success'"
+          [class.text-warning-700]="status === 'warning'"
         >
           {{ label }}
           @if (required) {
-            <span class="text-red-500">*</span>
+            <span class="text-error-500">*</span>
           }
         </label>
       }
 
       <!-- Input Container -->
       <div class="relative">
-        <!-- Icon (if provided) -->
-        @if (icon) {
+        <!-- Prefix Icon or Text -->
+        @if (prefix) {
           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <i [class]="icon" class="text-gray-400"></i>
+            @if (isIconPrefix) {
+              <i [class]="prefix + ' text-gray-400'"></i>
+            } @else {
+              <span class="text-gray-500">{{ prefix }}</span>
+            }
           </div>
         }
 
         <!-- Input Field -->
         <input
-          [type]="type"
           [id]="id"
+          [type]="type"
+          [value]="value"
           [placeholder]="placeholder"
-          [formControl]="control"
-          [attr.aria-label]="label || placeholder"
-          [attr.aria-invalid]="isInvalid"
-          [attr.aria-describedby]="errorId"
+          [disabled]="disabled"
+          [readonly]="readonly"
+          [required]="required"
+          [min]="min"
+          [max]="max"
+          [minlength]="minlength"
+          [maxlength]="maxlength"
+          [pattern]="pattern"
+          [autocomplete]="autocomplete"
           [class]="inputClasses"
-          (blur)="onTouched()"
-        />
+          (input)="onInput($event)"
+          (blur)="onBlur()"
+          (focus)="onFocus()"
+        >
 
-        <!-- Password Toggle (for password fields) -->
-        @if (type === 'password') {
+        <!-- Suffix Icon or Text -->
+        @if (suffix) {
+          <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+            @if (isIconSuffix) {
+              <i
+                [class]="suffix + ' text-gray-400 cursor-pointer'"
+                (click)="onSuffixClick()"
+              ></i>
+            } @else {
+              <span class="text-gray-500">{{ suffix }}</span>
+            }
+          </div>
+        }
+
+        <!-- Password Toggle -->
+        @if (type === 'password' && showPasswordToggle) {
           <button
             type="button"
             class="absolute inset-y-0 right-0 pr-3 flex items-center"
             (click)="togglePasswordVisibility()"
           >
-            <i [class]="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'" class="text-gray-400"></i>
+            <i
+              [class]="showPassword ? 'fas fa-eye-slash' : 'fas fa-eye'"
+              class="text-gray-400 hover:text-gray-600"
+            ></i>
+          </button>
+        }
+
+        <!-- Clear Button -->
+        @if (showClear && value && !disabled && !readonly) {
+          <button
+            type="button"
+            class="absolute inset-y-0 right-0 pr-3 flex items-center"
+            (click)="clear()"
+          >
+            <i class="fas fa-times-circle text-gray-400 hover:text-gray-600"></i>
           </button>
         }
       </div>
 
-      <!-- Error Message -->
-      @if (isInvalid && control.errors) {
-        <div [id]="errorId" class="mt-1 text-sm text-red-600" role="alert">
-          @if (control.errors['required']) {
-            {{ label || 'This field' }} is required
-          } @else if (control.errors['email']) {
-            Please enter a valid email address
-          } @else if (control.errors['minlength']) {
-            {{ label || 'This field' }} must be at least {{ control.errors['minlength'].requiredLength }} characters
-          } @else if (control.errors['maxlength']) {
-            {{ label || 'This field' }} cannot exceed {{ control.errors['maxlength'].requiredLength }} characters
-          } @else if (control.errors['pattern']) {
-            {{ label || 'This field' }} is invalid
-          } @else if (control.errors['custom']) {
-            {{ control.errors['custom'] }}
-          }
+      <!-- Helper Text -->
+      @if (helperText) {
+        <p
+          class="mt-1 text-sm"
+          [class.text-gray-500]="!status"
+          [class.text-error-600]="status === 'error'"
+          [class.text-success-600]="status === 'success'"
+          [class.text-warning-600]="status === 'warning'"
+        >
+          {{ helperText }}
+        </p>
+      }
+
+      <!-- Character Count -->
+      @if (showCharCount && maxlength) {
+        <div class="mt-1 text-right text-sm text-gray-500">
+          {{ value?.length || 0 }}/{{ maxlength }}
         </div>
       }
-
-      <!-- Helper Text -->
-      @if (helperText && !isInvalid) {
-        <p class="mt-1 text-sm text-gray-500">{{ helperText }}</p>
-      }
     </div>
-  `,
-  styles: [`
-    :host {
-      display: block;
-    }
-  `]
+  `
 })
 export class InputComponent implements ControlValueAccessor {
-  @Input() type: 'text' | 'password' | 'email' | 'number' | 'tel' = 'text';
+  @Input() id = `input-${Math.random().toString(36).substr(2, 9)}`;
+  @Input() type: InputType = 'text';
   @Input() label = '';
   @Input() placeholder = '';
-  @Input() icon = '';
-  @Input() helperText = '';
+  @Input() size: InputSize = 'md';
+  @Input() status?: InputStatus;
+  @Input() disabled = false;
+  @Input() readonly = false;
   @Input() required = false;
-  @Input() id = `input-${Math.random().toString(36).substr(2, 9)}`;
+  @Input() min?: number | string;
+  @Input() max?: number | string;
+  @Input() minlength?: number;
+  @Input() maxlength?: number;
+  @Input() pattern?: string;
+  @Input() autocomplete = 'off';
+  @Input() helperText = '';
+  @Input() prefix = '';
+  @Input() suffix = '';
+  @Input() showPasswordToggle = true;
+  @Input() showClear = false;
+  @Input() showCharCount = false;
+  @Input() fullWidth = false;
 
-  control = new FormControl('');
+  @Output() focus = new EventEmitter<void>();
+  @Output() blur = new EventEmitter<void>();
+  @Output() suffixClick = new EventEmitter<void>();
+  @Output() cleared = new EventEmitter<void>();
+
+  value: string = '';
   showPassword = false;
-  isDisabled = false;
+  touched = false;
+  isIconPrefix = false;
+  isIconSuffix = false;
 
-  // Unique ID for error message
-  errorId = `${this.id}-error`;
+  private onChange: (value: string) => void = () => {};
+  private onTouched: () => void = () => {};
 
-  // Base input classes
-  private readonly baseInputClasses = `
-    block w-full rounded-md 
-    border-gray-300 shadow-sm
-    focus:border-primary-500 focus:ring-primary-500
-    disabled:bg-gray-100 disabled:cursor-not-allowed
-    transition duration-150 ease-in-out
-  `.trim();
+  ngOnInit(): void {
+    this.isIconPrefix = this.prefix?.startsWith('fa-');
+    this.isIconSuffix = this.suffix?.startsWith('fa-');
+  }
+
+  get wrapperClasses(): string {
+    return this.fullWidth ? 'w-full' : '';
+  }
 
   get inputClasses(): string {
-    const iconPadding = this.icon ? 'pl-10' : 'pl-4';
-    const passwordPadding = this.type === 'password' ? 'pr-10' : 'pr-4';
-    const errorClasses = this.isInvalid ? 'border-red-300 focus:border-red-500 focus:ring-red-500' : '';
-    
-    return `
-      ${this.baseInputClasses}
-      ${iconPadding}
-      ${passwordPadding}
-      ${errorClasses}
-    `.trim();
+    const classes = [
+      'block rounded-md shadow-sm',
+      'focus:outline-none focus:ring-2 focus:ring-offset-0',
+      this.disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white',
+      this.readonly ? 'bg-gray-50' : '',
+      this.getStatusClasses(),
+      this.getSizeClasses(),
+      this.getPaddingClasses(),
+      this.fullWidth ? 'w-full' : ''
+    ];
+
+    return classes.filter(Boolean).join(' ');
   }
 
-  get isInvalid(): boolean {
-    return this.control.invalid && (this.control.dirty || this.control.touched);
+  private getStatusClasses(): string {
+    const baseClasses = {
+      default: 'border-gray-300 focus:border-primary-500 focus:ring-primary-500',
+      error: 'border-error-300 focus:border-error-500 focus:ring-error-500',
+      success: 'border-success-300 focus:border-success-500 focus:ring-success-500',
+      warning: 'border-warning-300 focus:border-warning-500 focus:ring-warning-500'
+    };
+
+    return this.status ? baseClasses[this.status] : baseClasses.default;
   }
 
-  // ControlValueAccessor methods
-  onChange = (_: any) => {};
-  onTouched = () => {};
-
-  writeValue(value: any): void {
-    this.control.setValue(value, { emitEvent: false });
+  private getSizeClasses(): string {
+    return {
+      sm: 'px-3 py-1.5 text-sm',
+      md: 'px-4 py-2 text-base',
+      lg: 'px-4 py-2.5 text-lg'
+    }[this.size];
   }
 
-  registerOnChange(fn: any): void {
-    this.control.valueChanges.subscribe(fn);
+  private getPaddingClasses(): string {
+    const hasPrefix = !!this.prefix;
+    const hasSuffix = !!this.suffix || (this.type === 'password' && this.showPasswordToggle) || this.showClear;
+
+    return `${hasPrefix ? 'pl-10' : ''} ${hasSuffix ? 'pr-10' : ''}`;
+  }
+
+  writeValue(value: string): void {
+    this.value = value;
+  }
+
+  registerOnChange(fn: (value: string) => void): void {
     this.onChange = fn;
   }
 
-  registerOnTouched(fn: any): void {
+  registerOnTouched(fn: () => void): void {
     this.onTouched = fn;
   }
 
   setDisabledState(isDisabled: boolean): void {
-    this.isDisabled = isDisabled;
-    if (isDisabled) {
-      this.control.disable();
-    } else {
-      this.control.enable();
+    this.disabled = isDisabled;
+  }
+
+  onInput(event: Event): void {
+    const value = (event.target as HTMLInputElement).value;
+    this.value = value;
+    this.onChange(value);
+  }
+
+  onBlur(): void {
+    this.touched = true;
+    this.onTouched();
+    this.blur.emit();
+  }
+
+  onFocus(): void {
+    this.focus.emit();
+  }
+
+  onSuffixClick(): void {
+    if (this.isIconSuffix) {
+      this.suffixClick.emit();
     }
   }
 
   togglePasswordVisibility(): void {
     this.showPassword = !this.showPassword;
     this.type = this.showPassword ? 'text' : 'password';
+  }
+
+  clear(): void {
+    this.value = '';
+    this.onChange('');
+    this.cleared.emit();
+  }
+
+  // Helper method to set value programmatically
+  setValue(value: string): void {
+    this.value = value;
+    this.onChange(value);
+  }
+
+  // Helper method to set status
+  setStatus(status?: InputStatus): void {
+    this.status = status;
+  }
+
+  // Helper method to set helper text
+  setHelperText(text: string): void {
+    this.helperText = text;
+  }
+
+  // Helper method to focus input
+  focusInput(): void {
+    const input = document.getElementById(this.id) as HTMLInputElement;
+    if (input) {
+      input.focus();
+    }
+  }
+
+  // Helper method to select all text
+  selectAll(): void {
+    const input = document.getElementById(this.id) as HTMLInputElement;
+    if (input) {
+      input.select();
+    }
+  }
+
+  // Helper method to check validity
+  isValid(): boolean {
+    const input = document.getElementById(this.id) as HTMLInputElement;
+    return input ? input.checkValidity() : true;
   }
 }
