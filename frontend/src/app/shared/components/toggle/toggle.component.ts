@@ -3,219 +3,262 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 type ToggleSize = 'sm' | 'md' | 'lg';
-type ToggleVariant = 'primary' | 'success' | 'warning' | 'danger';
+type ToggleType = 'primary' | 'secondary' | 'success' | 'danger' | 'warning' | 'info';
 
 @Component({
   selector: 'app-toggle',
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <div class="flex items-center">
-      <!-- Left Label -->
-      @if (label && labelPosition === 'left') {
-        <label 
-          [for]="id" 
-          class="mr-3 select-none"
-          [class]="getLabelClasses()"
-        >
-          {{ label }}
-        </label>
-      }
-
-      <!-- Toggle Button -->
-      <button
-        type="button"
-        role="switch"
-        [id]="id"
-        [attr.aria-checked]="checked"
-        [attr.aria-label]="ariaLabel || label"
-        [disabled]="disabled"
-        (click)="toggle()"
-        class="group relative inline-flex shrink-0 cursor-pointer items-center outline-none transition-colors duration-200 ease-in-out focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-        [class]="getToggleClasses()"
+    <label
+      class="inline-flex items-center"
+      [class.cursor-pointer]="!disabled"
+      [class.opacity-50]="disabled"
+    >
+      <!-- Toggle Switch -->
+      <div
+        class="relative"
+        [class]="getToggleContainerClasses()"
       >
-        <!-- Background -->
-        <span
-          aria-hidden="true"
-          class="pointer-events-none absolute mx-auto h-full w-full rounded-full transition-colors duration-200 ease-in-out"
-          [class]="getBackgroundClasses()"
-        ></span>
+        <!-- Input -->
+        <input
+          type="checkbox"
+          class="sr-only"
+          [id]="id"
+          [checked]="checked"
+          [disabled]="disabled"
+          (change)="onToggle($event)"
+        />
 
-        <!-- Toggle Handle -->
-        <span
-          aria-hidden="true"
-          class="pointer-events-none absolute transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-          [class]="getHandleClasses()"
+        <!-- Track -->
+        <div
+          class="block rounded-full transition-colors duration-200"
+          [class]="getTrackClasses()"
+        ></div>
+
+        <!-- Thumb -->
+        <div
+          class="absolute rounded-full transform transition-transform duration-200 flex items-center justify-center"
+          [class]="getThumbClasses()"
         >
-          @if (icon) {
-            <span 
-              class="flex h-full w-full items-center justify-center"
-              [class]="getIconClasses()"
-            >
-              <i [class]="icon"></i>
-            </span>
+          <!-- Icon -->
+          @if (checked && checkedIcon) {
+            <i [class]="checkedIcon" [class]="getIconClasses()"></i>
           }
-        </span>
-      </button>
+          @if (!checked && uncheckedIcon) {
+            <i [class]="uncheckedIcon" [class]="getIconClasses()"></i>
+          }
+        </div>
+      </div>
 
-      <!-- Right Label -->
-      @if (label && labelPosition === 'right') {
-        <label 
-          [for]="id" 
-          class="ml-3 select-none"
+      <!-- Label -->
+      @if (label) {
+        <span
           [class]="getLabelClasses()"
+          [class.ml-2]="labelPosition === 'right'"
+          [class.mr-2]="labelPosition === 'left'"
         >
           {{ label }}
-        </label>
+        </span>
       }
-
-      <!-- Description -->
-      @if (description) {
-        <span class="ml-3 text-sm text-gray-500">{{ description }}</span>
-      }
-    </div>
+    </label>
   `
 })
 export class ToggleComponent {
   @Input() checked = false;
   @Input() disabled = false;
   @Input() size: ToggleSize = 'md';
-  @Input() variant: ToggleVariant = 'primary';
+  @Input() type: ToggleType = 'primary';
   @Input() label = '';
   @Input() labelPosition: 'left' | 'right' = 'right';
-  @Input() description = '';
-  @Input() icon = '';
-  @Input() ariaLabel = '';
+  @Input() checkedIcon = '';
+  @Input() uncheckedIcon = '';
   @Input() id = `toggle-${Math.random().toString(36).substr(2, 9)}`;
 
   @Output() checkedChange = new EventEmitter<boolean>();
+  @Output() change = new EventEmitter<boolean>();
 
+  private readonly sizeMap = {
+    sm: {
+      container: 'w-8 h-4',
+      thumb: 'w-3 h-3',
+      thumbOffset: 'translate-x-4',
+      icon: 'text-xs',
+      label: 'text-sm'
+    },
+    md: {
+      container: 'w-11 h-6',
+      thumb: 'w-5 h-5',
+      thumbOffset: 'translate-x-5',
+      icon: 'text-sm',
+      label: 'text-base'
+    },
+    lg: {
+      container: 'w-14 h-8',
+      thumb: 'w-7 h-7',
+      thumbOffset: 'translate-x-6',
+      icon: 'text-base',
+      label: 'text-lg'
+    }
+  };
+
+  private readonly colorMap = {
+    primary: {
+      track: 'bg-primary-500',
+      thumb: 'text-primary-500',
+      icon: 'text-primary-500'
+    },
+    secondary: {
+      track: 'bg-gray-500',
+      thumb: 'text-gray-500',
+      icon: 'text-gray-500'
+    },
+    success: {
+      track: 'bg-green-500',
+      thumb: 'text-green-500',
+      icon: 'text-green-500'
+    },
+    danger: {
+      track: 'bg-red-500',
+      thumb: 'text-red-500',
+      icon: 'text-red-500'
+    },
+    warning: {
+      track: 'bg-yellow-500',
+      thumb: 'text-yellow-500',
+      icon: 'text-yellow-500'
+    },
+    info: {
+      track: 'bg-blue-500',
+      thumb: 'text-blue-500',
+      icon: 'text-blue-500'
+    }
+  };
+
+  getToggleContainerClasses(): string {
+    return this.sizeMap[this.size].container;
+  }
+
+  getTrackClasses(): string {
+    return `
+      ${this.checked ? this.colorMap[this.type].track : 'bg-gray-200'}
+      w-full h-full
+    `;
+  }
+
+  getThumbClasses(): string {
+    return `
+      ${this.sizeMap[this.size].thumb}
+      bg-white
+      shadow-sm
+      top-0.5
+      left-0.5
+      ${this.checked ? this.sizeMap[this.size].thumbOffset : 'translate-x-0'}
+    `;
+  }
+
+  getIconClasses(): string {
+    return `
+      ${this.sizeMap[this.size].icon}
+      ${this.colorMap[this.type].icon}
+    `;
+  }
+
+  getLabelClasses(): string {
+    return `
+      ${this.sizeMap[this.size].label}
+      text-gray-700
+      select-none
+    `;
+  }
+
+  onToggle(event: Event): void {
+    if (!this.disabled) {
+      const checked = (event.target as HTMLInputElement).checked;
+      this.checked = checked;
+      this.checkedChange.emit(checked);
+      this.change.emit(checked);
+    }
+  }
+
+  // Helper method to toggle state
   toggle(): void {
     if (!this.disabled) {
       this.checked = !this.checked;
       this.checkedChange.emit(this.checked);
+      this.change.emit(this.checked);
     }
   }
 
-  getToggleClasses(): string {
-    const sizes = {
-      sm: 'h-5 w-9',
-      md: 'h-6 w-11',
-      lg: 'h-7 w-14'
-    };
-    return sizes[this.size];
+  // Helper method to set checked state
+  setChecked(checked: boolean): void {
+    if (this.checked !== checked && !this.disabled) {
+      this.checked = checked;
+      this.checkedChange.emit(checked);
+      this.change.emit(checked);
+    }
   }
 
-  getBackgroundClasses(): string {
-    const baseClasses = this.checked ? this.getActiveBackgroundColor() : 'bg-gray-200';
-    return baseClasses;
+  // Helper method to set disabled state
+  setDisabled(disabled: boolean): void {
+    this.disabled = disabled;
   }
 
-  getHandleClasses(): string {
-    const sizes = {
-      sm: 'h-4 w-4',
-      md: 'h-5 w-5',
-      lg: 'h-6 w-6'
-    };
-
-    const positions = {
-      sm: this.checked ? 'translate-x-4' : 'translate-x-1',
-      md: this.checked ? 'translate-x-5' : 'translate-x-1',
-      lg: this.checked ? 'translate-x-7' : 'translate-x-1'
-    };
-
-    return `${sizes[this.size]} ${positions[this.size]}`;
+  // Helper method to set size
+  setSize(size: ToggleSize): void {
+    this.size = size;
   }
 
-  getIconClasses(): string {
-    const sizes = {
-      sm: 'text-xs',
-      md: 'text-sm',
-      lg: 'text-base'
-    };
-    return `${sizes[this.size]} ${this.checked ? 'text-primary-600' : 'text-gray-400'}`;
+  // Helper method to set type
+  setType(type: ToggleType): void {
+    this.type = type;
   }
 
-  getLabelClasses(): string {
-    const sizes = {
-      sm: 'text-sm',
-      md: 'text-base',
-      lg: 'text-lg'
-    };
-    return `${sizes[this.size]} ${this.disabled ? 'text-gray-400' : 'text-gray-900'}`;
+  // Helper method to set label
+  setLabel(label: string): void {
+    this.label = label;
   }
 
-  private getActiveBackgroundColor(): string {
-    const colors = {
-      primary: 'bg-primary-600',
-      success: 'bg-green-600',
-      warning: 'bg-yellow-600',
-      danger: 'bg-red-600'
-    };
-    return colors[this.variant];
+  // Helper method to set label position
+  setLabelPosition(position: 'left' | 'right'): void {
+    this.labelPosition = position;
   }
 
-  // Helper method to get hover background color
-  getHoverBackgroundColor(): string {
-    if (this.disabled) return '';
-
-    const colors = {
-      primary: 'hover:bg-primary-700',
-      success: 'hover:bg-green-700',
-      warning: 'hover:bg-yellow-700',
-      danger: 'hover:bg-red-700'
-    };
-    return colors[this.variant];
+  // Helper method to set icons
+  setIcons(checkedIcon: string, uncheckedIcon: string): void {
+    this.checkedIcon = checkedIcon;
+    this.uncheckedIcon = uncheckedIcon;
   }
 
-  // Helper method to get focus ring color
-  getFocusRingColor(): string {
-    const colors = {
-      primary: 'focus:ring-primary-500',
-      success: 'focus:ring-green-500',
-      warning: 'focus:ring-yellow-500',
-      danger: 'focus:ring-red-500'
+  // Helper method to get dimensions
+  getDimensions(): { width: string; height: string } {
+    const [width, height] = this.sizeMap[this.size].container.split(' ');
+    return {
+      width: width.replace('w-', ''),
+      height: height.replace('h-', '')
     };
-    return colors[this.variant];
   }
 
-  // Helper method to get handle position
-  getHandlePosition(): string {
-    const positions = {
-      sm: { start: '0.25rem', end: '1rem' },
-      md: { start: '0.25rem', end: '1.25rem' },
-      lg: { start: '0.25rem', end: '1.75rem' }
-    };
-    return this.checked ? positions[this.size].end : positions[this.size].start;
+  // Helper method to get color scheme
+  getColorScheme(): { track: string; thumb: string; icon: string } {
+    return this.colorMap[this.type];
   }
 
-  // Helper method to get handle size
-  getHandleSize(): string {
-    const sizes = {
-      sm: '1rem',
-      md: '1.25rem',
-      lg: '1.5rem'
-    };
-    return sizes[this.size];
+  // Helper method to check if has label
+  hasLabel(): boolean {
+    return !!this.label;
   }
 
-  // Helper method to get track width
-  getTrackWidth(): string {
-    const widths = {
-      sm: '2.25rem',
-      md: '2.75rem',
-      lg: '3.5rem'
-    };
-    return widths[this.size];
+  // Helper method to check if has icons
+  hasIcons(): boolean {
+    return !!(this.checkedIcon || this.uncheckedIcon);
   }
 
-  // Helper method to get track height
-  getTrackHeight(): string {
-    const heights = {
-      sm: '1.25rem',
-      md: '1.5rem',
-      lg: '1.75rem'
+  // Helper method to get current state
+  getState(): { checked: boolean; disabled: boolean } {
+    return {
+      checked: this.checked,
+      disabled: this.disabled
     };
-    return heights[this.size];
   }
 }
