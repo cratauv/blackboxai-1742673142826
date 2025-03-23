@@ -1,218 +1,213 @@
 import { Component, Input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-
-type CardVariant = 'default' | 'primary' | 'success' | 'warning' | 'danger';
+import { RouterModule } from '@angular/router';
 
 @Component({
   selector: 'app-card',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, RouterModule],
   template: `
-    <div 
-      class="rounded-lg shadow-sm overflow-hidden"
-      [class]="getContainerClasses()"
+    <div
+      class="bg-white rounded-lg shadow-sm overflow-hidden"
+      [class.hover:shadow-md]="hoverable"
+      [class.transition-shadow]="hoverable"
+      [class.cursor-pointer]="clickable || routerLink"
+      [class.border]="bordered"
+      [class.border-gray-200]="bordered"
+      (click)="onClick()"
     >
-      <!-- Card Header -->
-      @if (showHeader) {
-        <div 
-          class="px-4 py-5 sm:px-6 border-b"
-          [class]="getHeaderClasses()"
+      <!-- Card Image -->
+      @if (image) {
+        <div
+          [class.aspect-video]="imageAspectRatio === '16:9'"
+          [class.aspect-square]="imageAspectRatio === '1:1'"
         >
-          <div class="flex items-center justify-between">
-            <div class="flex items-center">
-              @if (icon) {
-                <i [class]="icon" class="mr-3 text-xl"></i>
-              }
-              
-              <div>
-                @if (title) {
-                  <h3 class="text-lg font-medium leading-6">
-                    {{ title }}
-                  </h3>
-                }
-                
-                @if (subtitle) {
-                  <p class="mt-1 text-sm">
-                    {{ subtitle }}
-                  </p>
-                }
-              </div>
-            </div>
-
-            @if (showHeaderAction) {
-              <div class="flex items-center">
-                <ng-content select="[cardHeaderAction]"></ng-content>
-              </div>
-            }
-          </div>
+          <img
+            [src]="image"
+            [alt]="imageAlt || title"
+            class="w-full h-full object-cover"
+            [class.rounded-t-lg]="true"
+          >
         </div>
       }
 
-      <!-- Card Content -->
-      <div [class]="getContentClasses()">
+      <!-- Card Header -->
+      @if (showHeader) {
+        <div
+          class="px-4 py-3 border-b border-gray-200"
+          [class.bg-gray-50]="headerBackground"
+        >
+          @if (title) {
+            <h3 class="text-lg font-medium text-gray-900">{{ title }}</h3>
+          }
+          @if (subtitle) {
+            <p class="mt-1 text-sm text-gray-500">{{ subtitle }}</p>
+          }
+          @if (headerContent) {
+            <ng-content select="[slot=header]"></ng-content>
+          }
+        </div>
+      }
+
+      <!-- Card Body -->
+      <div [class]="getBodyClasses()">
         <ng-content></ng-content>
       </div>
 
       <!-- Card Footer -->
       @if (showFooter) {
-        <div 
-          class="px-4 py-4 sm:px-6 border-t"
-          [class]="getFooterClasses()"
+        <div
+          class="px-4 py-3 border-t border-gray-200"
+          [class.bg-gray-50]="footerBackground"
         >
-          <ng-content select="[cardFooter]"></ng-content>
+          <ng-content select="[slot=footer]"></ng-content>
         </div>
       }
 
       <!-- Loading Overlay -->
       @if (loading) {
-        <div class="absolute inset-0 bg-white bg-opacity-50 flex items-center justify-center">
-          <div class="flex items-center space-x-2">
-            <div class="w-4 h-4 border-2 border-primary-600 rounded-full border-t-transparent animate-spin"></div>
-            <span class="text-sm text-gray-600">Loading...</span>
-          </div>
+        <div class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center">
+          <div class="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent"></div>
         </div>
       }
     </div>
-  `
+  `,
+  styles: [`
+    :host {
+      display: block;
+    }
+
+    .aspect-video {
+      aspect-ratio: 16 / 9;
+    }
+
+    .aspect-square {
+      aspect-ratio: 1 / 1;
+    }
+
+    @keyframes spin {
+      from {
+        transform: rotate(0deg);
+      }
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .animate-spin {
+      animation: spin 1s linear infinite;
+    }
+  `]
 })
 export class CardComponent {
-  @Input() variant: CardVariant = 'default';
   @Input() title = '';
   @Input() subtitle = '';
-  @Input() icon = '';
-  @Input() loading = false;
-  @Input() showHeader = true;
-  @Input() showFooter = true;
-  @Input() showHeaderAction = true;
-  @Input() noPadding = false;
+  @Input() image = '';
+  @Input() imageAlt = '';
+  @Input() imageAspectRatio: '16:9' | '1:1' = '16:9';
   @Input() hoverable = false;
+  @Input() clickable = false;
+  @Input() bordered = true;
+  @Input() loading = false;
+  @Input() showHeader = false;
+  @Input() showFooter = false;
+  @Input() headerBackground = false;
+  @Input() footerBackground = false;
+  @Input() padding: 'none' | 'small' | 'medium' | 'large' = 'medium';
+  @Input() routerLink?: string | any[];
 
-  getContainerClasses(): string {
-    const baseClasses = 'relative bg-white';
-    const hoverClasses = this.hoverable ? 'transition-transform hover:scale-[1.02]' : '';
-    
-    return `${baseClasses} ${hoverClasses}`;
+  // Computed property to check if header content exists
+  get headerContent(): boolean {
+    return this.title || this.subtitle;
   }
 
-  getHeaderClasses(): string {
-    const baseClasses = 'bg-white';
-    
-    switch (this.variant) {
-      case 'primary':
-        return `${baseClasses} border-primary-100`;
-      case 'success':
-        return `${baseClasses} border-green-100`;
-      case 'warning':
-        return `${baseClasses} border-yellow-100`;
-      case 'danger':
-        return `${baseClasses} border-red-100`;
-      default:
-        return `${baseClasses} border-gray-200`;
-    }
-  }
-
-  getContentClasses(): string {
-    const paddingClasses = this.noPadding ? '' : 'px-4 py-5 sm:p-6';
-    
-    switch (this.variant) {
-      case 'primary':
-        return `${paddingClasses} bg-primary-50`;
-      case 'success':
-        return `${paddingClasses} bg-green-50`;
-      case 'warning':
-        return `${paddingClasses} bg-yellow-50`;
-      case 'danger':
-        return `${paddingClasses} bg-red-50`;
-      default:
-        return `${paddingClasses} bg-white`;
-    }
-  }
-
-  getFooterClasses(): string {
-    switch (this.variant) {
-      case 'primary':
-        return 'bg-primary-50 border-primary-100';
-      case 'success':
-        return 'bg-green-50 border-green-100';
-      case 'warning':
-        return 'bg-yellow-50 border-yellow-100';
-      case 'danger':
-        return 'bg-red-50 border-red-100';
-      default:
-        return 'bg-gray-50 border-gray-200';
-    }
-  }
-
-  // Helper method to get variant-specific text color
-  getTextColor(): string {
-    switch (this.variant) {
-      case 'primary':
-        return 'text-primary-900';
-      case 'success':
-        return 'text-green-900';
-      case 'warning':
-        return 'text-yellow-900';
-      case 'danger':
-        return 'text-red-900';
-      default:
-        return 'text-gray-900';
-    }
-  }
-
-  // Helper method to get variant-specific border color
-  getBorderColor(): string {
-    switch (this.variant) {
-      case 'primary':
-        return 'border-primary-200';
-      case 'success':
-        return 'border-green-200';
-      case 'warning':
-        return 'border-yellow-200';
-      case 'danger':
-        return 'border-red-200';
-      default:
-        return 'border-gray-200';
-    }
-  }
-
-  // Helper method to get variant-specific icon color
-  getIconColor(): string {
-    switch (this.variant) {
-      case 'primary':
-        return 'text-primary-500';
-      case 'success':
-        return 'text-green-500';
-      case 'warning':
-        return 'text-yellow-500';
-      case 'danger':
-        return 'text-red-500';
-      default:
-        return 'text-gray-400';
-    }
-  }
-
-  // Helper method to check if card has header content
-  hasHeaderContent(): boolean {
-    return !!(this.title || this.subtitle || this.icon);
-  }
-
-  // Helper method to get elevation classes
-  getElevation(level: 'sm' | 'md' | 'lg' = 'sm'): string {
-    const elevations = {
-      sm: 'shadow-sm',
-      md: 'shadow-md',
-      lg: 'shadow-lg'
+  getBodyClasses(): string {
+    const paddingClasses = {
+      none: '',
+      small: 'p-2',
+      medium: 'p-4',
+      large: 'p-6'
     };
-    return elevations[level];
+
+    return paddingClasses[this.padding];
   }
 
-  // Helper method to get rounded corner classes
-  getRounded(size: 'sm' | 'md' | 'lg' = 'lg'): string {
-    const corners = {
-      sm: 'rounded-sm',
-      md: 'rounded-md',
-      lg: 'rounded-lg'
-    };
-    return corners[size];
+  onClick(): void {
+    if (this.clickable) {
+      // Emit click event if needed
+    }
+  }
+
+  // Helper method to set loading state
+  setLoading(loading: boolean): void {
+    this.loading = loading;
+  }
+
+  // Helper method to set title
+  setTitle(title: string): void {
+    this.title = title;
+  }
+
+  // Helper method to set subtitle
+  setSubtitle(subtitle: string): void {
+    this.subtitle = subtitle;
+  }
+
+  // Helper method to set image
+  setImage(image: string, alt?: string): void {
+    this.image = image;
+    if (alt) {
+      this.imageAlt = alt;
+    }
+  }
+
+  // Helper method to toggle header
+  toggleHeader(show: boolean): void {
+    this.showHeader = show;
+  }
+
+  // Helper method to toggle footer
+  toggleFooter(show: boolean): void {
+    this.showFooter = show;
+  }
+
+  // Helper method to set padding
+  setPadding(padding: 'none' | 'small' | 'medium' | 'large'): void {
+    this.padding = padding;
+  }
+
+  // Helper method to toggle hover effect
+  toggleHoverable(hoverable: boolean): void {
+    this.hoverable = hoverable;
+  }
+
+  // Helper method to toggle clickable state
+  toggleClickable(clickable: boolean): void {
+    this.clickable = clickable;
+  }
+
+  // Helper method to toggle border
+  toggleBorder(bordered: boolean): void {
+    this.bordered = bordered;
+  }
+
+  // Helper method to set router link
+  setRouterLink(link: string | any[]): void {
+    this.routerLink = link;
+  }
+
+  // Helper method to toggle header background
+  toggleHeaderBackground(show: boolean): void {
+    this.headerBackground = show;
+  }
+
+  // Helper method to toggle footer background
+  toggleFooterBackground(show: boolean): void {
+    this.footerBackground = show;
+  }
+
+  // Helper method to set image aspect ratio
+  setImageAspectRatio(ratio: '16:9' | '1:1'): void {
+    this.imageAspectRatio = ratio;
   }
 }
